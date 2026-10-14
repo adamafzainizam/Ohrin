@@ -16,8 +16,11 @@ jobs:
   core:
     name: Core tests (no PyTorch)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -34,15 +37,21 @@ jobs:
   ml:
     name: Full tests (with PyTorch)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: requirements-ml.txt
+          cache-dependency-path: |
+            requirements.txt
+            requirements-ml.txt
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - run: pip install -r requirements-ml.txt --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
+      - run: pip install 'torch>=2.2' --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install -r requirements-ml.txt
       - uses: actions/setup-node@v4
         with:
           node-version: "22"

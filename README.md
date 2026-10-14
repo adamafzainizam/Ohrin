@@ -14,7 +14,7 @@ Read [the vision and first-version baseline](docs/concept.md). The broader ambit
 
 ## Next step
 
-Check how the instrument heads transfer to full mixes on permitted audio, and decide whether a larger or better-suited model is needed. [The model card](docs/model-card.md) records the held-out OpenMIC evaluation and its limits. The Deftones reference MP3 and its local 02:44–end [signal case study](docs/reference-case-study.md) remain a private qualitative reference.
+Check how the instrument heads transfer to full mixes on permitted audio, and decide whether a larger or better-suited model is needed. [The model card](docs/model-card.md) records the held-out OpenMIC evaluation and its limits. The Deftones reference recording itself is private and not distributed. The linked [case study](docs/reference-case-study.md) contains only local signal measurements and limitations; no model scores on it are published.
 
 <!-- Screenshot: docs/img/workbench.png (to add; use synthetic or permitted audio only, never the private reference) -->
 
@@ -59,13 +59,14 @@ VGGish weights are downloaded from their upstream sources and are not redistribu
 
 ```bash
 python3 scripts/fetch_vggish.py            # -> data/vggish/
-python3 -m pip install -r requirements-ml.txt --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple   # CPU wheel; a plain install pulls the much larger CUDA build on Linux
+python3 -m pip install 'torch>=2.2' --index-url https://download.pytorch.org/whl/cpu   # CPU index only; a plain install pulls the much larger CUDA build on Linux
+python3 -m pip install -r requirements-ml.txt   # remaining requirements from PyPI
 python3 scripts/fetch_openmic.py --yes     # ~2.6 GB; extracts four files to data/openmic-2018/
 python3 -m experiments.train_openmic --data-root data/openmic-2018   # writes outputs/openmic-{linear,mlp}.pt + metrics
 python3 -m ohrin.server
 ```
 
-`fetch_openmic.py` without `--yes` only prints the download size. Use `--archive PATH` for an already-downloaded `openmic-2018-v1.0.0.tgz` (MD5 `e4ccf187e2bb5ab2e115416e8aafe7f4`). OpenMIC-2018 is distributed under its own licence and attribution terms; the archive listing contains a `license-cc-by.txt` member (read it yourself; this repository does not restate its terms). Upstream source: [OpenMIC-2018 on Zenodo](https://zenodo.org/record/1432913).
+`fetch_openmic.py` without `--yes` only prints the download size (unless the archive is already cached at `data/openmic-2018-v1.0.0.tgz`, in which case it extracts it). Use `--archive PATH` for an already-downloaded `openmic-2018-v1.0.0.tgz` (MD5 `e4ccf187e2bb5ab2e115416e8aafe7f4`). OpenMIC-2018 is distributed under its own licence and attribution terms; the archive listing contains a `license-cc-by.txt` member (read it yourself; this repository does not restate its terms). Upstream source: [OpenMIC-2018 on Zenodo](https://zenodo.org/record/1432913).
 
 On the 2026-10-12 run the held-out macro average precision was about 0.915 (linear) and 0.919 (MLP), against 0.550 for a class prior. Small differences across torch versions or CPUs are possible; re-running the whole sequence on a clean machine has not been measured. Results and checkpoints are written to ignored `outputs/`.
 
