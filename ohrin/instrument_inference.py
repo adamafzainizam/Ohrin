@@ -5,6 +5,8 @@ ten 0.96 s embeddings per ~10 s segment -> OpenMIC-trained head. The heads were
 fitted and evaluated on OpenMIC clips; nothing here validates them on full
 commercial mixes, so results are shown as uncertain model outputs.
 """
+import sys
+import traceback
 from pathlib import Path
 
 import numpy as np
@@ -83,22 +85,39 @@ class InstrumentModel:
 _cached = {}
 
 
+def _short(exc, limit=160):
+    text = " ".join(str(exc).split())
+    return text if len(text) <= limit else text[:limit] + "..."
+
+
+def _log_failure(what):
+    print(f"ohrin: {what} failed:", file=sys.stderr)
+    traceback.print_exc(file=sys.stderr)
+
+
 def get_model():
     """Load once; return (model, None) or (None, reason)."""
     if "result" not in _cached:
         try:
             _cached["result"] = (InstrumentModel.load(), None)
         except ImportError as exc:
-            if (getattr(exc, "name", None) or "").split(".")[0] == "torch" or "torch" in str(exc).lower():
+            _log_failure("model load")
+            top = (getattr(exc, "name", None) or "").split(".")[0]
+            if top == "torch":
                 reason = "PyTorch is not installed; instrument candidates are unavailable. See README."
+            elif "torch" in str(exc).lower():
+                reason = (f"PyTorch failed to import: {_short(exc)}; "
+                          "instrument candidates are unavailable. Fix it and restart the server.")
             else:
-                reason = (f"A dependency could not be imported ({type(exc).__name__}: {exc}); "
+                reason = (f"A dependency could not be imported ({type(exc).__name__}: {_short(exc)}); "
                           "instrument candidates are unavailable. Fix it and restart the server.")
             _cached["result"] = (None, reason)
         except FileNotFoundError as exc:
+            _log_failure("model load")
             _cached["result"] = (None, f"Missing local file: {exc}. See docs/model-card.md.")
         except Exception as exc:  # corrupt or incompatible weights/checkpoint: report, do not drop the request
-            _cached["result"] = (None, f"The instrument model could not be loaded ({type(exc).__name__}: {exc}). "
+            _log_failure("model load")
+            _cached["result"] = (None, f"The instrument model could not be loaded ({type(exc).__name__}: {_short(exc)}). "
                                        "Check the weights and checkpoint, then restart the server.")
     return _cached["result"]
 
@@ -111,3 +130,6 @@ def predict_or_unavailable(path, start_s, end_s):
         return model.predict(path, start_s, end_s)
     except (ValueError, OSError) as exc:
         return {"available": False, "reason": str(exc) or "Instrument analysis failed."}
+    except Exception:  # e.g. torch RuntimeError / out of memory: keep the response a valid analysis result
+        _log_failure("prediction")
+        return {"available": False, "reason": "Instrument analysis failed unexpectedly; see the server log."}

@@ -45,6 +45,41 @@ class ModelAvailabilityTests(unittest.TestCase):
         self.assertNotIn("PyTorch is not installed", reason)
         self.assertIn("scipy", reason)
 
+    def test_broken_torch_install_is_not_reported_as_missing(self):
+        err = ImportError("libtorch_cpu.so: cannot open shared object file", name="libtorch_cpu.so")
+        with mock.patch.object(InstrumentModel, "load", side_effect=err):
+            _, reason = inference.get_model()
+        self.assertNotIn("not installed", reason)
+        self.assertIn("PyTorch failed to import", reason)
+
+    def test_torch_submodule_import_error_is_reported_as_missing_torch(self):
+        err = ImportError("No module named 'torch.nn'", name="torch.nn")
+        with mock.patch.object(InstrumentModel, "load", side_effect=err):
+            _, reason = inference.get_model()
+        self.assertIn("PyTorch is not installed", reason)
+
+    def test_load_failure_is_logged_to_stderr(self):
+        import contextlib, io
+        buf = io.StringIO()
+        with mock.patch.object(InstrumentModel, "load", side_effect=RuntimeError("boom")), \
+                contextlib.redirect_stderr(buf):
+            inference.get_model()
+        self.assertIn("RuntimeError", buf.getvalue())
+        self.assertIn("Traceback", buf.getvalue())
+
+    def test_unexpected_prediction_error_becomes_unavailable_and_is_logged(self):
+        import contextlib, io
+        model = mock.Mock()
+        model.predict.side_effect = RuntimeError("CUDA out of memory secret-path")
+        buf = io.StringIO()
+        inference._cached["result"] = (model, None)
+        with contextlib.redirect_stderr(buf):
+            out = inference.predict_or_unavailable("x.wav", 0.0, 10.0)
+        self.assertFalse(out["available"])
+        self.assertNotIn("secret-path", out["reason"])
+        self.assertIn("Traceback", buf.getvalue())
+        self.assertIn("secret-path", buf.getvalue())
+
     def test_torch_import_error_by_name_is_reported_as_missing_torch(self):
         err = ImportError("No module named 'torch'", name="torch")
         with mock.patch.object(InstrumentModel, "load", side_effect=err):
@@ -59,7 +94,7 @@ class ModelAvailabilityTests(unittest.TestCase):
         self.assertIn("restart", out["reason"])
 
     @unittest.skipUnless(HAS_TORCH, "PyTorch not installed")
-    def test_real_corrupt_checkpoint_file_is_reported_not_raised(self):
+    def test_unusable_weights_and_checkpoint_files_are_reported_not_raised(self):
         import tempfile
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)
