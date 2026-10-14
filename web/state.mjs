@@ -51,6 +51,7 @@ export function instrumentTimeline(instruments, passage) {
   if (!instruments?.available || !Array.isArray(instruments.segments) || !instruments.segments.length) return null;
   const segments = instruments.segments;
   const classes = Array.isArray(instruments.classes) ? instruments.classes : [];
+  if (!classes.length) return null;
   const rows = classes.map(c => ({
     name: c.name,
     threshold: c.threshold,
@@ -72,17 +73,30 @@ export function instrumentTimeline(instruments, passage) {
   if (Number.isFinite(pStart) && Number.isFinite(pEnd)) {
     let cursor = pStart;
     for (const s of [...segments].sort((a, b) => a.start_s - b.start_s)) {
-      if (s.start_s - cursor > EDGE_TOLERANCE_S) uncovered.push({ start_s: cursor, end_s: s.start_s });
+      if (s.start_s - cursor > EDGE_TOLERANCE_S) {
+        uncovered.push({ start_s: cursor, end_s: s.start_s, position: cursor === pStart ? 'start' : 'middle' });
+      }
       cursor = Math.max(cursor, s.end_s);
     }
-    if (pEnd - cursor > EDGE_TOLERANCE_S) uncovered.push({ start_s: cursor, end_s: pEnd });
+    if (pEnd - cursor > EDGE_TOLERANCE_S) uncovered.push({ start_s: cursor, end_s: pEnd, position: 'end' });
   }
   const shortCount = segments.filter(s => s.end_s - s.start_s < SEGMENT_NOMINAL_S - EDGE_TOLERANCE_S).length;
   return { resolution_s: SEGMENT_NOMINAL_S, rows, uncovered, shortCount };
 }
 
+export function uncoveredCaption(uncovered) {
+  const parts = [];
+  for (const u of Array.isArray(uncovered) ? uncovered : []) {
+    const len = (u.end_s - u.start_s).toFixed(1);
+    if (u.position === 'end') parts.push(`The final ${len} s was not scored.`);
+    else if (u.position === 'start') parts.push(`The first ${len} s was not scored.`);
+    else parts.push(`${len} s between ${formatTime(u.start_s)} and ${formatTime(u.end_s)} was not scored.`);
+  }
+  return parts.join(' ');
+}
+
 export const LABELS = Object.freeze(['heard', 'not_heard', 'unsure']);
-const TARGET_PATTERN = /^(class:[a-z]+|seg:\d+:[a-z]+)$/;
+const TARGET_PATTERN = /^(class:[a-z0-9_]+|seg:\d+:[a-z0-9_]+)$/;
 
 export function emptyReview(key = null) { return { key, labels: {} }; }
 
@@ -135,7 +149,41 @@ export function reviewSummary(review) {
 export function isStaleResponse(requested, current) {
   return requested.file !== current.file
     || requested.selection.start !== current.selection.start
-    || requested.selection.end !== current.selection.end;
+    || requested.selection.end !== current.selection.end
+    || (requested.id !== undefined && requested.id !== current.id);
+}
+
+// What a finished analysis request may touch. `stale` responses must not write
+// results or status text (success or failure). Only the latest request owns the
+// Analyse button, so an older request cannot re-enable it during a newer one.
+export function settleRequest(requested, current) {
+  return {
+    stale: isStaleResponse(requested, current),
+    ownsButton: requested.id === current.id,
+  };
+}
+
+export const DRAG_THRESHOLD_PX = 4;
+
+export function dragExceeded(startX, currentX, thresholdPx = DRAG_THRESHOLD_PX) {
+  const a = Number(startX), b = Number(currentX);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  return Math.abs(b - a) >= thresholdPx;
+}
+
+export function reviewTallyText(classes, review) {
+  const list = Array.isArray(classes) ? classes : [];
+  const counts = { heard: 0, not_heard: 0, unsure: 0 };
+  let marked = 0;
+  for (const c of list) {
+    const label = review.labels[candidateTarget(c.name)];
+    if (label) { counts[label] += 1; marked += 1; }
+  }
+  const detail = [counts.heard && `${counts.heard} heard`, counts.not_heard && `${counts.not_heard} not heard`,
+    counts.unsure && `${counts.unsure} unsure`].filter(Boolean).join(', ');
+  const blocks = reviewSummary(review).total - marked;
+  return `You marked ${marked} of ${list.length} candidates${detail ? ` (${detail})` : ''}.`
+    + (blocks > 0 ? ` ${blocks} block mark${blocks === 1 ? '' : 's'} set.` : '');
 }
 
 export const NOTE_SCHEMA = 'ohrin.passage-note';

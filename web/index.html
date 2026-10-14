@@ -57,14 +57,16 @@
       </section>
 
       <section class="results" id="results" hidden>
+        <p id="liveStatus" class="visually-hidden" role="status" aria-live="polite"></p>
         <div class="section-head"><div><p class="kicker">02 / NOTICE</p><h2>What changes?</h2></div><span class="tag">Measured from the mix</span></div>
         <div class="energy-card"><div class="card-top"><strong>Energy &amp; texture</strong><span>One-second windows · RMS level</span></div><canvas id="energyChart" height="190" aria-label="Measured audio level over the passage"></canvas><p id="energyCaption" class="subtle"></p>
           <div id="instrumentTimeline" class="timeline" hidden>
             <div class="card-top"><strong>Instrument scores over time</strong><span class="tag">Model output · uncertain</span></div>
             <div id="timelineRows" class="timeline-rows"></div>
+            <div id="blockStrip" class="block-strip" role="group" aria-label="Blocks. Arrow keys move between blocks; Enter selects one to mark."></div>
             <table id="timelineTable" class="visually-hidden"><caption>Instrument model scores per segment (uncertain model output)</caption><thead></thead><tbody></tbody></table>
             <p id="timelineCaption" class="subtle"></p>
-            <div id="segmentReview" class="segment-review" hidden></div>
+            <div id="segmentReview" class="segment-review" role="region" aria-label="Block review" hidden></div>
           </div>
         </div>
         <div class="result-grid">
@@ -73,7 +75,7 @@
         </div>
         <div class="result-grid">
           <article class="panel"><span class="panel-number">MODEL OUTPUT</span><h3>Instrument candidates</h3><div id="instrumentCandidates" class="candidate-list"></div><p id="instrumentCaveat" class="subtle"></p>
-            <div id="reviewWrap" hidden><p id="reviewTally" class="review-tally" aria-live="polite"></p><p class="subtle">Your marks are your own listening judgement. They stay in this tab, are not sent anywhere, and are not used to train or score the model. Reloading clears them. Export the note to keep them.</p></div></article>
+            <div id="reviewWrap" hidden><p id="reviewTally" class="review-tally"></p><p class="subtle">Your marks are your own listening judgement. They stay in this tab, are not sent anywhere, and are not used to train or score the model. Reloading clears them. Export the note to keep them.</p></div></article>
         </div>
         <div class="section-head next-head"><div><p class="kicker">03 / TRY</p><h2>Turn hearing into action</h2></div><span class="tag tag-amber">Ideas, not detections</span></div>
         <div class="result-grid">

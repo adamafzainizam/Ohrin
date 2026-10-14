@@ -1,6 +1,6 @@
 import { clampSelection, shouldLoop, shouldStop, formatTime, measuredObservations, timeToFraction, instrumentTimeline,
   emptyReview, reviewKey, candidateTarget, segmentTarget, setLabel, reconcileReview, pruneReview, reviewSummary,
-  isStaleResponse, buildPassageNote } from './state.mjs';
+  settleRequest, dragExceeded, uncoveredCaption, reviewTallyText, buildPassageNote } from './state.mjs';
 
 const $ = id => document.getElementById(id);
 const fileInput = $('audioFile');
@@ -12,11 +12,18 @@ let objectUrl = null;
 let waveform = null;
 let selection = { start: 0, end: 0 };
 let dragStart = null;
+let dragStartX = 0;
+let dragging = false;
+let requestSeq = 0;
+let rovingSegment = 0;
 let analysis = null;
 let review = emptyReview();
 let selectedSegment = null;
 
 function setText(id, value) { $(id).textContent = value; }
+function setTextIfChanged(id, value) { if ($(id).textContent !== value) $(id).textContent = value; }
+function resetAnalyzeButton() { $('analyzeButton').innerHTML = 'Analyse passage <span>↗</span>'; }
+function announce(text) { setTextIfChanged('liveStatus', text); }
 function clearPassageFindings() {
   analysis = null;
   review = emptyReview();
@@ -88,6 +95,8 @@ async function loadFile(chosen) {
   if (!chosen) return;
   if (objectUrl) URL.revokeObjectURL(objectUrl);
   player.pause(); file = chosen; waveform = null;
+  requestSeq += 1; // invalidate any in-flight analysis; it no longer owns the button
+  resetAnalyzeButton();
   clearPassageFindings();
   objectUrl = URL.createObjectURL(chosen);
   setText('fileName', chosen.name);
@@ -122,16 +131,22 @@ function timeAtPointer(event) {
 }
 canvas.addEventListener('pointerdown', event => {
   if (!file || !Number.isFinite(player.duration)) return;
-  dragStart = timeAtPointer(event); canvas.setPointerCapture(event.pointerId);
+  dragStart = timeAtPointer(event); dragStartX = event.clientX; dragging = false;
+  canvas.setPointerCapture(event.pointerId);
 });
-canvas.addEventListener('pointermove', event => { if (dragStart !== null) updateSelection(dragStart, timeAtPointer(event)); });
+canvas.addEventListener('pointermove', event => {
+  if (dragStart === null) return;
+  if (!dragging && dragExceeded(dragStartX, event.clientX)) dragging = true;
+  if (dragging) updateSelection(dragStart, timeAtPointer(event));
+});
 canvas.addEventListener('pointerup', event => {
   if (dragStart === null) return;
   const end = timeAtPointer(event);
-  if (Math.abs(end - dragStart) < .3) player.currentTime = end;
-  else updateSelection(dragStart, end);
-  dragStart = null;
+  if (dragging) updateSelection(dragStart, end);
+  else player.currentTime = end; // a click, not a drag: seek only, keep the selection and findings
+  dragStart = null; dragging = false;
 });
+canvas.addEventListener('pointercancel', () => { dragStart = null; dragging = false; });
 for (const id of ['startTime', 'endTime']) $(id).addEventListener('change', () => updateSelection(Number($('startTime').value), Number($('endTime').value)));
 $('speed').addEventListener('change', () => { player.playbackRate = Number($('speed').value); player.preservesPitch = true; });
 $('playButton').addEventListener('click', () => {
@@ -181,15 +196,20 @@ function reviewFieldset(target, group, legend) {
     const input = document.createElement('input'); input.type = 'radio'; input.name = group; input.value = value;
     input.checked = review.labels[target] === value;
     input.dataset.focusId = `${group}-${value}`;
-    input.addEventListener('change', () => { review = setLabel(review, target, value); renderReview(); });
+    input.addEventListener('change', () => { review = setLabel(review, target, value); renderReview(); announceTally(); });
     label.append(input, ' ', text); set.append(label);
   }
   const clear = document.createElement('button'); clear.type = 'button'; clear.className = 'review-clear'; clear.textContent = 'Clear';
   clear.dataset.focusId = `${group}-clear`;
   clear.setAttribute('aria-label', `Clear mark: ${legend}`);
-  clear.addEventListener('click', () => { review = setLabel(review, target, null); renderReview(); });
+  clear.addEventListener('click', () => { review = setLabel(review, target, null); renderReview(); announceTally(); });
   set.append(clear);
   return set;
+}
+
+function announceTally() {
+  const info = analysis?.instruments;
+  if (info?.available) announce(reviewTallyText(info.classes, review));
 }
 
 function renderReview() {
@@ -204,12 +224,7 @@ function renderReview() {
       addCandidate(inst, c.name, `score ${c.probability} · ${c.above_threshold ? 'above' : 'below'} tuned threshold ${c.threshold} · uncertain`);
       inst.lastElementChild.append(reviewFieldset(candidateTarget(c.name), `review-class-${c.name}`, `Do you hear ${c.name} in this passage?`));
     }
-    const sum = reviewSummary(review);
-    const marked = info.classes.filter(c => review.labels[candidateTarget(c.name)]);
-    const counts = { heard: 0, not_heard: 0, unsure: 0 };
-    for (const c of marked) counts[review.labels[candidateTarget(c.name)]] += 1;
-    const detail = [counts.heard && `${counts.heard} heard`, counts.not_heard && `${counts.not_heard} not heard`, counts.unsure && `${counts.unsure} unsure`].filter(Boolean).join(', ');
-    setText('reviewTally', `You marked ${marked.length} of ${info.classes.length} candidates${detail ? ` (${detail})` : ''}.${sum.total > marked.length ? ` ${sum.total - marked.length} block mark${sum.total - marked.length === 1 ? '' : 's'} set.` : ''}`);
+    setTextIfChanged('reviewTally', reviewTallyText(info.classes, review));
   }
   drawTimeline();
   const box = $('segmentReview');
@@ -238,6 +253,7 @@ function renderReview() {
   if (focusId) document.querySelector(`[data-focus-id="${CSS.escape(focusId)}"]`)?.focus();
 }
 
+const pct = f => `${(f * 100).toFixed(3)}%`;
 function fmtScore(p) { return p === null ? 'n/a' : p.toFixed(2); }
 
 function drawTimeline() {
@@ -245,12 +261,12 @@ function drawTimeline() {
   const rowsEl = $('timelineRows');
   const table = $('timelineTable');
   rowsEl.replaceChildren();
+  $('blockStrip').replaceChildren();
   table.tHead.replaceChildren();
   table.tBodies[0].replaceChildren();
   const tl = analysis ? instrumentTimeline(analysis.instruments, analysis.passage) : null;
   box.hidden = !tl;
   if (!tl) return;
-  const pct = f => `${(f * 100).toFixed(3)}%`;
   for (const row of tl.rows) {
     const label = document.createElement('div'); label.className = 'timeline-label'; label.setAttribute('aria-hidden', 'true');
     label.textContent = `${row.name} · threshold ${row.threshold}`;
@@ -264,14 +280,12 @@ function drawTimeline() {
     }
     for (const c of row.cells) {
       const mark = review.labels[segmentTarget(c.index, row.name)];
-      const cell = document.createElement('button'); cell.type = 'button';
+      const cell = document.createElement('div');
       cell.className = `tl-cell ${c.above ? 'above' : 'below'}${c.short ? ' short' : ''}${selectedSegment === c.index ? ' selected' : ''}`;
-      cell.dataset.focusId = `seg-${c.index}-${row.name}`;
-      cell.setAttribute('aria-pressed', String(selectedSegment === c.index));
-      cell.addEventListener('click', () => { selectedSegment = c.index; renderReview(); });
+      cell.setAttribute('aria-hidden', 'true'); // mouse convenience only; keyboard and AT use the block strip below
+      cell.addEventListener('click', () => selectSegment(c.index));
       cell.style.left = pct(c.left); cell.style.width = pct(c.width);
       cell.title = `${row.name} ${formatTime(c.start_s)}–${formatTime(c.end_s)} · score ${fmtScore(c.probability)} · ${c.above ? 'above' : 'below'} threshold ${row.threshold} · model output${mark ? ` · your mark: ${MARK_TEXT[mark]}` : ''}`;
-      cell.setAttribute('aria-label', `${cell.title}. Select this block to mark what you hear.`);
       if (mark) { const g = document.createElement('span'); g.className = 'tl-glyph'; g.setAttribute('aria-hidden', 'true'); g.textContent = MARK_GLYPH[mark]; cell.append(g); }
       const fill = document.createElement('div'); fill.className = 'tl-fill'; fill.setAttribute('aria-hidden', 'true');
       fill.style.height = pct(c.probability === null ? 0 : Math.max(0, Math.min(1, c.probability)));
@@ -282,6 +296,7 @@ function drawTimeline() {
     track.append(marker);
     rowsEl.append(label, track);
   }
+  drawBlockStrip(tl);
   const headRow = table.tHead.insertRow();
   for (const text of ['Time', ...tl.rows.map(r => r.name)]) {
     const th = document.createElement('th'); th.scope = 'col'; th.textContent = text; headRow.append(th);
@@ -297,10 +312,51 @@ function drawTimeline() {
   });
   const parts = [`Each block averages about ${tl.resolution_s} s of audio (ten 0.96 s VGGish frames), so changes inside a block are invisible and block edges are not entry or exit times. Scores come from an OpenMIC-trained head evaluated on 10 s clips, not on full mixes.`];
   if (tl.shortCount) parts.push(`${tl.shortCount} short block${tl.shortCount === 1 ? ' is' : 's are'} outside the training condition.`);
-  const missing = tl.uncovered.reduce((sum, u) => sum + (u.end_s - u.start_s), 0);
-  if (missing > 0) parts.push(`The final ${missing.toFixed(1)} s was not scored.`);
+  const gaps = uncoveredCaption(tl.uncovered);
+  if (gaps) parts.push(gaps);
   if (first.cells.length === 1) parts.push('Only one block: no change over time can be shown.');
-  setText('timelineCaption', parts.join(' '));
+  setTextIfChanged('timelineCaption', parts.join(' '));
+}
+
+function selectSegment(index) {
+  selectedSegment = index; rovingSegment = index;
+  renderReview();
+  const seg = analysis?.instruments?.segments?.[index];
+  if (seg) announce(`Block ${index + 1}, ${formatTime(seg.start_s)} to ${formatTime(seg.end_s)} selected. Marking controls are below the timeline.`);
+}
+
+// One real button per block (not per class row), a single tab stop with arrow keys.
+function drawBlockStrip(tl) {
+  const strip = $('blockStrip');
+  strip.replaceChildren();
+  const count = tl.rows[0].cells.length;
+  if (rovingSegment >= count) rovingSegment = 0;
+  const active = selectedSegment ?? rovingSegment;
+  const buttons = [];
+  tl.rows[0].cells.forEach((c, i) => {
+    const marks = tl.rows.map(r => review.labels[segmentTarget(i, r.name)] && `${r.name}: ${MARK_TEXT[review.labels[segmentTarget(i, r.name)]]}`).filter(Boolean);
+    const b = document.createElement('button'); b.type = 'button'; b.className = `tl-block${selectedSegment === i ? ' selected' : ''}`;
+    b.dataset.focusId = `seg-${i}`;
+    b.tabIndex = i === active ? 0 : -1;
+    b.setAttribute('aria-controls', 'segmentReview');
+    if (selectedSegment === i) b.setAttribute('aria-current', 'true');
+    b.setAttribute('aria-label', `Block ${i + 1} of ${count}, ${formatTime(c.start_s)} to ${formatTime(c.end_s)}${marks.length ? `. Your marks: ${marks.join(', ')}` : ''}`);
+    b.textContent = String(i + 1);
+    b.style.left = pct(c.left); b.style.width = pct(c.width);
+    b.addEventListener('click', () => selectSegment(i));
+    buttons.push(b); strip.append(b);
+  });
+  strip.onkeydown = event => {
+    const cur = buttons.indexOf(document.activeElement);
+    if (cur < 0) return;
+    const next = { ArrowRight: cur + 1, ArrowDown: cur + 1, ArrowLeft: cur - 1, ArrowUp: cur - 1, Home: 0, End: buttons.length - 1 }[event.key];
+    if (next === undefined) return;
+    event.preventDefault();
+    const target = buttons[Math.max(0, Math.min(buttons.length - 1, next))];
+    rovingSegment = buttons.indexOf(target);
+    buttons.forEach(b => { b.tabIndex = b === target ? 0 : -1; });
+    target.focus();
+  };
 }
 
 function addCandidate(container, title, detail) {
@@ -342,18 +398,23 @@ function showAnalysis() {
 $('analyzeButton').addEventListener('click', async () => {
   if (!file || selection.end - selection.start < 1) { setText('selectionLabel', 'Select at least one second.'); return; }
   const button = $('analyzeButton'); button.disabled = true; button.textContent = 'Analysing…';
-  const requested = { file, selection: { start: selection.start, end: selection.end } };
+  requestSeq += 1;
+  const requested = { id: requestSeq, file, selection: { start: selection.start, end: selection.end } };
+  const settle = () => settleRequest(requested, { id: requestSeq, file, selection });
   try {
-    const url = `/api/analyze?start=${encodeURIComponent(selection.start)}&end=${encodeURIComponent(selection.end)}`;
-    const response = await fetch(url, { method: 'POST', body: file, headers: { 'Content-Type': file.type || 'application/octet-stream' } });
+    const url = `/api/analyze?start=${encodeURIComponent(requested.selection.start)}&end=${encodeURIComponent(requested.selection.end)}`;
+    const response = await fetch(url, { method: 'POST', body: requested.file, headers: { 'Content-Type': requested.file.type || 'application/octet-stream' } });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Analysis failed.');
-    if (isStaleResponse(requested, { file, selection })) return;
+    if (settle().stale) return;
     analysis = result;
     review = pruneReview(reconcileReview(review, reviewKey(file, result.passage)), result.instruments);
     showAnalysis();
-  } catch (error) { setText('selectionLabel', error.message); }
-  finally { button.disabled = false; button.innerHTML = 'Analyse passage <span>↗</span>'; }
+  } catch (error) {
+    if (!settle().stale) setText('selectionLabel', error.message);
+  } finally {
+    if (settle().ownsButton) { button.disabled = false; resetAnalyzeButton(); }
+  }
 });
 
 $('exportButton').addEventListener('click', () => {

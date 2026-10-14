@@ -4,7 +4,8 @@ import {
   clampSelection, shouldLoop, shouldStop, measuredObservations,
   timeToFraction, instrumentTimeline, SEGMENT_NOMINAL_S,
   LABELS, emptyReview, reviewKey, candidateTarget, segmentTarget, setLabel, toggleLabel,
-  reconcileReview, pruneReview, reviewSummary, isStaleResponse,
+  reconcileReview, pruneReview, reviewSummary, isStaleResponse, settleRequest,
+  dragExceeded, DRAG_THRESHOLD_PX, uncoveredCaption, reviewTallyText,
   NOTE_SCHEMA, NOTE_SCHEMA_VERSION, buildPassageNote,
 } from '../web/state.mjs';
 
@@ -81,7 +82,7 @@ test('instrumentTimeline reports dropped tail and short blocks', () => {
   ] }, { start_s: 0, end_s: 5 });
   assert.equal(short.shortCount, 1);
   assert.equal(short.rows[0].cells[0].short, true);
-  assert.deepEqual(short.uncovered, [{ start_s: 4.8, end_s: 5 }]);
+  assert.deepEqual(short.uncovered, [{ start_s: 4.8, end_s: 5, position: 'end' }]);
 });
 
 test('instrumentTimeline geometry sums to covered fraction', () => {
@@ -230,4 +231,63 @@ test('buildPassageNote with unavailable instruments sets listening_review null',
     chordCorrection: '', arrangementNotes: '', review: emptyReview('k'), exportedAt: 't' });
   assert.equal(note.listening_review, null);
   assert.deepEqual(note.instrument_candidates, { available: false, reason: 'r' });
+});
+
+test('settleRequest: a stale failed request touches neither status nor the button while a newer one runs', () => {
+  const f = {};
+  const sel = { start: 1, end: 5 };
+  const old = { id: 1, file: f, selection: sel };
+  const current = { id: 2, file: f, selection: sel };
+  assert.deepEqual(settleRequest(old, current), { stale: true, ownsButton: false });
+  assert.deepEqual(settleRequest({ id: 2, file: f, selection: sel }, current), { stale: false, ownsButton: true });
+});
+
+test('settleRequest: the latest request still owns the button when the selection changed', () => {
+  const f = {};
+  const r = { id: 3, file: f, selection: { start: 1, end: 5 } };
+  assert.deepEqual(settleRequest(r, { id: 3, file: f, selection: { start: 2, end: 5 } }), { stale: true, ownsButton: true });
+  assert.deepEqual(settleRequest(r, { id: 3, file: {}, selection: { start: 1, end: 5 } }), { stale: true, ownsButton: true });
+});
+
+test('dragExceeded ignores sub-threshold pointer wobble', () => {
+  assert.equal(dragExceeded(100, 101), false);
+  assert.equal(dragExceeded(100, 100 + DRAG_THRESHOLD_PX - 1), false);
+  assert.equal(dragExceeded(100, 100 + DRAG_THRESHOLD_PX), true);
+  assert.equal(dragExceeded(100, 90), true);
+  assert.equal(dragExceeded(NaN, 90), false);
+});
+
+test('instrumentTimeline returns null when available but classes are empty or missing', () => {
+  const segments = [{ start_s: 0, end_s: 9.6, probabilities: {} }];
+  assert.equal(instrumentTimeline({ available: true, classes: [], segments }, { start_s: 0, end_s: 9.6 }), null);
+  assert.equal(instrumentTimeline({ available: true, segments }, { start_s: 0, end_s: 9.6 }), null);
+});
+
+test('setLabel accepts any class name from the analysis, such as mallet_percussion', () => {
+  const r = setLabel(emptyReview('k'), candidateTarget('mallet_percussion'), 'heard');
+  assert.equal(r.labels['class:mallet_percussion'], 'heard');
+  const r2 = setLabel(r, segmentTarget(3, 'mallet_percussion'), 'unsure');
+  assert.equal(r2.labels['seg:3:mallet_percussion'], 'unsure');
+  assert.throws(() => setLabel(r, 'class:Mallet', 'heard'), TypeError);
+});
+
+test('uncovered captions say final, first or middle according to where the gap is', () => {
+  const classes = [{ name: 'bass', threshold: 0.3 }];
+  const mk = segments => instrumentTimeline({ available: true, classes, segments: segments.map(([a, b]) => ({ start_s: a, end_s: b, probabilities: { bass: 0.1 } })) }, { start_s: 0, end_s: 30 });
+  assert.match(uncoveredCaption(mk([[0, 9.6], [9.6, 19.2]]).uncovered), /^The final 10\.8 s was not scored\.$/);
+  const head = uncoveredCaption(mk([[5, 30]]).uncovered);
+  assert.match(head, /^The first 5\.0 s/);
+  assert.equal(head.includes('final'), false);
+  const mid = uncoveredCaption(mk([[0, 9.6], [20, 30]]).uncovered);
+  assert.match(mid, /10\.4 s between 00:09 and 00:20/);
+  assert.equal(mid.includes('final'), false);
+  assert.equal(uncoveredCaption([]), '');
+});
+
+test('reviewTallyText counts candidate marks and block marks', () => {
+  const classes = INSTRUMENTS.classes;
+  let r = emptyReview('k');
+  assert.equal(reviewTallyText(classes, r), 'You marked 0 of 2 candidates.');
+  r = setLabel(r, 'class:guitar', 'heard'); r = setLabel(r, 'seg:0:bass', 'unsure');
+  assert.equal(reviewTallyText(classes, r), 'You marked 1 of 2 candidates (1 heard). 1 block mark set.');
 });
