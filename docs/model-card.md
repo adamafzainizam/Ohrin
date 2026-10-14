@@ -1,6 +1,6 @@
 # Ohrin instrument-presence model card
 
-Status: **trained and evaluated on the official OpenMIC-2018 split on 2026-10-12**. The saved heads are still not usable on arbitrary uploaded audio because Ohrin does not have compatible VGGish extraction. Do not present instrument probabilities in the UI yet.
+Status: **trained and evaluated on the official OpenMIC-2018 split on 2026-10-12**. Since 2026-10-14 the app runs a local VGGish extractor and shows the heads' per-passage and per-block scores as uncertain model output, labelled as such. Transfer to full commercial mixes has not been measured.
 
 ## Intended task
 
@@ -12,7 +12,7 @@ The dataset is [OpenMIC-2018](https://zenodo.org/records/1432913). Its [official
 
 The downloaded `openmic-2018-v1.0.0.tgz` matched Zenodo's published MD5, `e4ccf187e2bb5ab2e115416e8aafe7f4`. The extracted NPZ has SHA-256 `3e5f9252e2f983737d13f87a52b3ee02c8cad357f00531762490b31f18d3e62e`. Its sample keys are stored as a NumPy object array, so the loader checks that exact NPZ hash before allowing pickle for that field. The actual archive uses `partitions/split01_train.csv` and `partitions/split01_test.csv`, despite different filenames in the companion README.
 
-The trained linear and MLP heads use **precomputed pretrained features**. This is supervised training, but it is not end-to-end audio model training. The current local passage analyser has no VGGish extractor, so these heads cannot yet produce valid predictions for arbitrary user audio or the Deftones reference. An inference path requires the same VGGish preprocessing and weights, plus a qualitative transfer check. This limitation is intentional in the UI: no untrained or incompatible instrument probabilities are shown.
+The trained linear and MLP heads use **precomputed pretrained features**. This is supervised training, but it is not end-to-end audio model training. Compatibility of the app's extractor with the stored features was checked on a small sample only (2026-10-14 section). The training itself used the stored embeddings. For uploaded audio the app computes embeddings with its own VGGish front end (see the 2026-10-14 section) and treats the result as uncertain model output; no transfer check on full mixes has been done.
 
 ## Evaluation protocol
 
@@ -36,10 +36,14 @@ The saved error keys show concrete cases for review. Both models strongly score 
 
 ## Current limits and next gate
 
-The held-out evaluation establishes a real supervised classification result on supplied VGGish embeddings. It does not establish transfer to arbitrary uploaded songs or the Deftones reference, detect exact instrument entry times, or identify performance roles. Add and validate matching VGGish preprocessing and weights before using a saved head in the UI; then check qualitative transfer on permitted audio. The public dataset's attribution/license terms and each audio example's metadata must be respected if examples are ever distributed.
+The held-out evaluation establishes a real supervised classification result on supplied VGGish embeddings. It does not establish transfer to arbitrary uploaded songs or the Deftones reference, detect exact instrument entry times, or identify performance roles. Transfer to full mixes still needs a qualitative check on permitted audio. The public dataset's attribution/license terms and each audio example's metadata must be respected if examples are ever distributed.
 
 ## Inference on uploaded audio (2026-10-14)
 
 `ohrin/vggish.py` reproduces the AudioSet VGGish front end and uses the torchvggish port weights plus Google's PCA parameters (not distributed in this repository; place them in `data/vggish/`). On 8 official OpenMIC OGG clips, extracted embeddings had a mean absolute difference of 2-6 (0-255 scale) from the stored features on 7 clips and 22.9 on one quiet clip; head probabilities changed by at most 0.07, with one threshold flip in 16 clip-head pairs. This is a small compatibility check, not a re-evaluation.
 
 Measured on a CPU-only laptop (6 threads): about 0.35 s warm for a 10 s clip including upload handling, 0.85 s on the first call (model load), and about 1.3 s for an 85 s passage. Segments shorter than 10 s are out of distribution for the heads (trained on 10 s means). Performance on full commercial mixes, as opposed to 10 s OpenMIC clips, has not been measured.
+
+## What the UI shows (2026-10-14)
+
+The workbench shows overall candidate scores for the passage and a per-block timeline of scores. Each block averages about 9.6 s (ten 0.96 s VGGish examples), so block edges are not entry or exit times, and a short tail may not be scored. Users can record their own listening marks (heard, not heard, unsure) per candidate and per block. Those marks live in the browser tab and in the exported note only; they are the user's judgement, are not ground truth, and are not evaluation or training data for this model.
