@@ -35,3 +35,48 @@ export function measuredObservations(windows) {
   }
   return remarks;
 }
+
+export const SEGMENT_NOMINAL_S = 9.6;
+const EDGE_TOLERANCE_S = 0.05;
+
+export function timeToFraction(t, passage) {
+  const start = Number(passage?.start_s);
+  const end = Number(passage?.end_s);
+  const value = Number(t);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(value) || end - start <= 0) return 0;
+  return Math.max(0, Math.min(1, (value - start) / (end - start)));
+}
+
+export function instrumentTimeline(instruments, passage) {
+  if (!instruments?.available || !Array.isArray(instruments.segments) || !instruments.segments.length) return null;
+  const segments = instruments.segments;
+  const classes = Array.isArray(instruments.classes) ? instruments.classes : [];
+  const rows = classes.map(c => ({
+    name: c.name,
+    threshold: c.threshold,
+    cells: segments.map((s, index) => {
+      const raw = s.probabilities?.[c.name];
+      const probability = typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
+      const left = timeToFraction(s.start_s, passage);
+      const right = timeToFraction(s.end_s, passage);
+      return {
+        index, start_s: s.start_s, end_s: s.end_s, probability,
+        above: probability !== null && probability >= c.threshold,
+        short: s.end_s - s.start_s < SEGMENT_NOMINAL_S - EDGE_TOLERANCE_S,
+        left, width: Math.max(0, right - left),
+      };
+    }),
+  }));
+  const uncovered = [];
+  const pStart = Number(passage?.start_s), pEnd = Number(passage?.end_s);
+  if (Number.isFinite(pStart) && Number.isFinite(pEnd)) {
+    let cursor = pStart;
+    for (const s of [...segments].sort((a, b) => a.start_s - b.start_s)) {
+      if (s.start_s - cursor > EDGE_TOLERANCE_S) uncovered.push({ start_s: cursor, end_s: s.start_s });
+      cursor = Math.max(cursor, s.end_s);
+    }
+    if (pEnd - cursor > EDGE_TOLERANCE_S) uncovered.push({ start_s: cursor, end_s: pEnd });
+  }
+  const shortCount = segments.filter(s => s.end_s - s.start_s < SEGMENT_NOMINAL_S - EDGE_TOLERANCE_S).length;
+  return { resolution_s: SEGMENT_NOMINAL_S, rows, uncovered, shortCount };
+}

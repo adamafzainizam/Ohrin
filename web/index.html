@@ -58,7 +58,14 @@
 
       <section class="results" id="results" hidden>
         <div class="section-head"><div><p class="kicker">02 / NOTICE</p><h2>What changes?</h2></div><span class="tag">Measured from the mix</span></div>
-        <div class="energy-card"><div class="card-top"><strong>Energy &amp; texture</strong><span>One-second windows · RMS level</span></div><canvas id="energyChart" height="190" aria-label="Measured audio level over the passage"></canvas><p id="energyCaption" class="subtle"></p></div>
+        <div class="energy-card"><div class="card-top"><strong>Energy &amp; texture</strong><span>One-second windows · RMS level</span></div><canvas id="energyChart" height="190" aria-label="Measured audio level over the passage"></canvas><p id="energyCaption" class="subtle"></p>
+          <div id="instrumentTimeline" class="timeline" hidden>
+            <div class="card-top"><strong>Instrument scores over time</strong><span class="tag">Model output · uncertain</span></div>
+            <div id="timelineRows" class="timeline-rows" aria-hidden="true"></div>
+            <table id="timelineTable" class="visually-hidden"><caption>Instrument model scores per segment (uncertain model output)</caption><thead></thead><tbody></tbody></table>
+            <p id="timelineCaption" class="subtle"></p>
+          </div>
+        </div>
         <div class="result-grid">
           <article class="panel"><span class="panel-number">01</span><h3>Measured changes</h3><ul id="observations"></ul><p class="subtle">Level, onset change, and frequency balance come from the mixed signal. They do not identify instruments.</p></article>
           <article class="panel"><span class="panel-number">02</span><h3>Pulse candidates</h3><div id="tempoCandidates" class="candidate-list"></div><p class="subtle">Autocorrelation can lock onto half-time or subdivisions. Tap and listen before trusting a beat grid.</p></article>

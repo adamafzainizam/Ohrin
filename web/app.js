@@ -1,4 +1,4 @@
-import { clampSelection, shouldLoop, shouldStop, formatTime, measuredObservations } from './state.mjs';
+import { clampSelection, shouldLoop, shouldStop, formatTime, measuredObservations, timeToFraction, instrumentTimeline } from './state.mjs';
 
 const $ = id => document.getElementById(id);
 const fileInput = $('audioFile');
@@ -154,13 +154,72 @@ function drawEnergy() {
   if (!values.length) return;
   ctx.beginPath();
   values.forEach((v, i) => {
-    const x = left + i / Math.max(values.length - 1, 1) * chartW;
+    const x = left + timeToFraction((v.start_s + v.end_s) / 2, analysis.passage) * chartW;
     const y = top + Math.max(0, Math.min(1, -v.rms_dbfs / 40)) * (bottom - top);
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   });
   ctx.strokeStyle = '#9fe4ca'; ctx.lineWidth = 2.5; ctx.stroke();
   ctx.fillStyle = '#839b94'; ctx.fillText(formatTime(analysis.passage.start_s), left, h - 4);
   ctx.fillText(formatTime(analysis.passage.end_s), w - 39, h - 4);
+}
+
+function fmtScore(p) { return p === null ? 'n/a' : p.toFixed(2); }
+
+function drawTimeline() {
+  const box = $('instrumentTimeline');
+  const rowsEl = $('timelineRows');
+  const table = $('timelineTable');
+  rowsEl.replaceChildren();
+  table.tHead.replaceChildren();
+  table.tBodies[0].replaceChildren();
+  const tl = analysis ? instrumentTimeline(analysis.instruments, analysis.passage) : null;
+  box.hidden = !tl;
+  if (!tl) return;
+  const pct = f => `${(f * 100).toFixed(3)}%`;
+  for (const row of tl.rows) {
+    const label = document.createElement('div'); label.className = 'timeline-label';
+    label.textContent = `${row.name} · threshold ${row.threshold}`;
+    const track = document.createElement('div'); track.className = 'timeline-track';
+    for (const u of tl.uncovered) {
+      const gap = document.createElement('div'); gap.className = 'tl-uncovered';
+      const l = timeToFraction(u.start_s, analysis.passage);
+      gap.style.left = pct(l); gap.style.width = pct(timeToFraction(u.end_s, analysis.passage) - l);
+      gap.textContent = 'not scored'; gap.title = `${formatTime(u.start_s)}–${formatTime(u.end_s)} not scored`;
+      track.append(gap);
+    }
+    for (const c of row.cells) {
+      const cell = document.createElement('div');
+      cell.className = `tl-cell ${c.above ? 'above' : 'below'}${c.short ? ' short' : ''}`;
+      cell.style.left = pct(c.left); cell.style.width = pct(c.width);
+      cell.title = `${row.name} ${formatTime(c.start_s)}–${formatTime(c.end_s)} · score ${fmtScore(c.probability)} · ${c.above ? 'above' : 'below'} threshold ${row.threshold} · model output`;
+      const fill = document.createElement('div'); fill.className = 'tl-fill';
+      fill.style.height = pct(c.probability === null ? 0 : Math.max(0, Math.min(1, c.probability)));
+      cell.append(fill); track.append(cell);
+    }
+    const marker = document.createElement('div'); marker.className = 'tl-threshold';
+    marker.style.bottom = pct(Math.max(0, Math.min(1, row.threshold)));
+    track.append(marker);
+    rowsEl.append(label, track);
+  }
+  const headRow = table.tHead.insertRow();
+  for (const text of ['Time', ...tl.rows.map(r => r.name)]) {
+    const th = document.createElement('th'); th.scope = 'col'; th.textContent = text; headRow.append(th);
+  }
+  const first = tl.rows[0];
+  first.cells.forEach((_, i) => {
+    const tr = table.tBodies[0].insertRow();
+    tr.insertCell().textContent = `${formatTime(first.cells[i].start_s)}–${formatTime(first.cells[i].end_s)}`;
+    for (const row of tl.rows) {
+      const c = row.cells[i];
+      tr.insertCell().textContent = `${fmtScore(c.probability)} (${c.above ? 'above' : 'below'})`;
+    }
+  });
+  const parts = [`Each block averages about ${tl.resolution_s} s of audio (ten 0.96 s VGGish frames), so changes inside a block are invisible and block edges are not entry or exit times. Scores come from an OpenMIC-trained head evaluated on 10 s clips, not on full mixes.`];
+  if (tl.shortCount) parts.push(`${tl.shortCount} short block${tl.shortCount === 1 ? ' is' : 's are'} outside the training condition.`);
+  const missing = tl.uncovered.reduce((sum, u) => sum + (u.end_s - u.start_s), 0);
+  if (missing > 0) parts.push(`The final ${missing.toFixed(1)} s was not scored.`);
+  if (first.cells.length === 1) parts.push('Only one block: no change over time can be shown.');
+  setText('timelineCaption', parts.join(' '));
 }
 
 function addCandidate(container, title, detail) {
@@ -172,6 +231,7 @@ function addCandidate(container, title, detail) {
 
 function showAnalysis() {
   $('results').hidden = false;
+  $('timelineRows').replaceChildren(); $('timelineTable').tBodies[0].replaceChildren();
   const remarks = measuredObservations(analysis.windows);
   const list = $('observations'); list.replaceChildren();
   for (const remark of remarks.length ? remarks : ['No one-second level drop over 3 dB was found in this selection.']) {
@@ -195,7 +255,7 @@ function showAnalysis() {
   const strongest = remarks[0] || 'Compare the first and last part of the selection.';
   setText('creativeIdea', `Try rebuilding the passage with the same overall level contrast. ${strongest} Change the timing or the layer that carries it to make the idea your own.`);
   setText('energyCaption', 'RMS dBFS from the mixed recording. Higher on the chart means louder; this is not an instrument stem.');
-  drawEnergy(); $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  drawEnergy(); drawTimeline(); $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 $('analyzeButton').addEventListener('click', async () => {
@@ -225,5 +285,5 @@ $('exportButton').addEventListener('click', () => {
   const link = document.createElement('a'); link.href = url; link.download = 'ohrin-passage-note.json'; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
-window.addEventListener('resize', () => { drawWaveform(); if (analysis) drawEnergy(); });
+window.addEventListener('resize', () => { drawWaveform(); if (analysis) { drawEnergy(); drawTimeline(); } });
 drawWaveform();
