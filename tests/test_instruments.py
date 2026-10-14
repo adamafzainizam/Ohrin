@@ -1,17 +1,21 @@
+import importlib.util
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
 import numpy as np
-import torch
 
-from ohrin.instruments import (
-    TARGETS, average_precision, grouped_validation_split, load_openmic,
-    masked_bce_loss, precision_recall_f1, fit_classifier,
-)
+HAS_TORCH = importlib.util.find_spec("torch") is not None
+if HAS_TORCH:
+    import torch
+    from ohrin.instruments import (
+        TARGETS, average_precision, grouped_validation_split, load_openmic,
+        masked_bce_loss, precision_recall_f1, fit_classifier,
+    )
 
 
+@unittest.skipUnless(HAS_TORCH, "PyTorch not installed")
 class InstrumentTests(unittest.TestCase):
     def test_masked_loss_ignores_unknown_labels(self):
         logits = torch.tensor([[0.0, 0.0]], requires_grad=True)

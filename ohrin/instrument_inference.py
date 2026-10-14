@@ -8,15 +8,19 @@ commercial mixes, so results are shown as uncertain model outputs.
 from pathlib import Path
 
 import numpy as np
-import torch
 
-from .instruments import make_model
-from .vggish import Extractor, decode_mono_16k
+# torch (and the modules that import it) are loaded lazily so the core
+# workbench imports and runs without PyTorch installed.
 
 ROOT = Path(__file__).resolve().parent.parent
 SEGMENT_EXAMPLES = 10          # 10 x 0.96 s, the unit the heads were trained on
 EXAMPLE_SECONDS = 0.96
 MIN_SEGMENT_EXAMPLES = 3       # skip tails shorter than ~2.9 s
+
+
+def decode_mono_16k(*args, **kwargs):
+    from .vggish import decode_mono_16k as decode
+    return decode(*args, **kwargs)
 
 
 class InstrumentModel:
@@ -26,6 +30,10 @@ class InstrumentModel:
 
     @classmethod
     def load(cls, weights_dir=None, checkpoint=None, kind="mlp"):
+        import torch
+        from .instruments import make_model
+        from .vggish import Extractor
+
         weights_dir = Path(weights_dir or ROOT / "data" / "vggish")
         checkpoint = Path(checkpoint or ROOT / "outputs" / f"openmic-{kind}.pt")
         for needed in (weights_dir / "vggish-10086976.pth", weights_dir / "vggish_pca_params.npz", checkpoint):
@@ -39,6 +47,7 @@ class InstrumentModel:
         return cls(extractor.embed, head, state["classes"], state["thresholds"], f"OpenMIC {state['kind']} head")
 
     def _probabilities(self, embeddings):
+        import torch
         x = torch.tensor(embeddings.astype(np.float32) / 255.0)
         with torch.no_grad():
             return torch.sigmoid(self.head(x)).numpy()
@@ -79,6 +88,8 @@ def get_model():
     if "result" not in _cached:
         try:
             _cached["result"] = (InstrumentModel.load(), None)
+        except ImportError:
+            _cached["result"] = (None, "PyTorch is not installed; instrument candidates are unavailable. See README.")
         except FileNotFoundError as exc:
             _cached["result"] = (None, f"Missing local file: {exc}. See docs/model-card.md.")
     return _cached["result"]

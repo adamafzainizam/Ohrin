@@ -1,18 +1,43 @@
+import importlib.util
 import unittest
 from unittest import mock
 
 import numpy as np
-import torch
-from torch import nn
 
+import ohrin.instrument_inference as inference
 from ohrin.instrument_inference import InstrumentModel
 
+HAS_TORCH = importlib.util.find_spec("torch") is not None
+if HAS_TORCH:
+    import torch
+    from torch import nn
 
-class FakeHead(nn.Module):
-    def forward(self, x):  # logit grows with the mean embedding value
-        return torch.stack([x.mean(1) * 20 - 5, -x.mean(1) * 20 + 5], dim=1)
+    class FakeHead(nn.Module):
+        def forward(self, x):  # logit grows with the mean embedding value
+            return torch.stack([x.mean(1) * 20 - 5, -x.mean(1) * 20 + 5], dim=1)
 
 
+class ModelAvailabilityTests(unittest.TestCase):
+    def setUp(self):
+        inference._cached.clear()
+
+    def tearDown(self):
+        inference._cached.clear()
+
+    def test_get_model_reports_missing_files(self):
+        with mock.patch.object(InstrumentModel, "load", side_effect=FileNotFoundError("vggish-10086976.pth")):
+            model, reason = inference.get_model()
+        self.assertIsNone(model)
+        self.assertIn("vggish-10086976.pth", reason)
+
+    def test_get_model_reports_missing_torch(self):
+        with mock.patch.object(InstrumentModel, "load", side_effect=ImportError("No module named torch")):
+            model, reason = inference.get_model()
+        self.assertIsNone(model)
+        self.assertIn("PyTorch", reason)
+
+
+@unittest.skipUnless(HAS_TORCH, "PyTorch not installed")
 class InstrumentModelTests(unittest.TestCase):
     def setUp(self):
         self.model = InstrumentModel(

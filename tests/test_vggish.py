@@ -1,12 +1,16 @@
+import importlib.util
 import unittest
 from pathlib import Path
 
 import numpy as np
-import torch
 
-from ohrin import vggish
+HAS_TORCH = importlib.util.find_spec("torch") is not None
+if HAS_TORCH:
+    import torch
+    from ohrin import vggish
 
 
+@unittest.skipUnless(HAS_TORCH, "PyTorch not installed")
 class VGGishFrontEndTests(unittest.TestCase):
     def test_mel_matrix_shape_and_support(self):
         m = vggish.mel_matrix()
