@@ -183,6 +183,15 @@ function showAnalysis() {
   const chords = $('chordCandidates'); chords.replaceChildren();
   for (const item of analysis.candidate_chords) addCandidate(chords, item.name, `frets ${item.suggested_standard_tuning_frets.join('–')} · match ${item.score}`);
   if (!analysis.candidate_chords.length) chords.textContent = 'No useful harmonic sketch found.';
+  const inst = $('instrumentCandidates'); inst.replaceChildren();
+  const info = analysis.instruments;
+  if (info && info.available) {
+    for (const c of info.classes) addCandidate(inst, c.name, `score ${c.probability} · ${c.above_threshold ? 'above' : 'below'} tuned threshold ${c.threshold} · uncertain`);
+    setText('instrumentCaveat', `${info.caveat} Segments: ${info.segments.length}.`);
+  } else {
+    inst.textContent = 'Instrument model unavailable.';
+    setText('instrumentCaveat', info ? info.reason : 'Not requested.');
+  }
   const strongest = remarks[0] || 'Compare the first and last part of the selection.';
   setText('creativeIdea', `Try rebuilding the passage with the same overall level contrast. ${strongest} Change the timing or the layer that carries it to make the idea your own.`);
   setText('energyCaption', 'RMS dBFS from the mixed recording. Higher on the chart means louder; this is not an instrument stem.');
@@ -209,6 +218,7 @@ $('exportButton').addEventListener('click', () => {
     measured_observations: measuredObservations(analysis.windows),
     tempo_candidates: analysis.tempo_candidates, harmonic_candidates: analysis.candidate_chords,
     chord_correction: $('chordCorrection').value, arrangement_notes: $('arrangementNotes').value,
+    instrument_candidates: analysis.instruments,
     limitations: analysis.limitations,
   };
   const url = URL.createObjectURL(new Blob([JSON.stringify(note, null, 2)], { type: 'application/json' }));

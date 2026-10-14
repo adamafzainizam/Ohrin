@@ -37,3 +37,9 @@ The saved error keys show concrete cases for review. Both models strongly score 
 ## Current limits and next gate
 
 The held-out evaluation establishes a real supervised classification result on supplied VGGish embeddings. It does not establish transfer to arbitrary uploaded songs or the Deftones reference, detect exact instrument entry times, or identify performance roles. Add and validate matching VGGish preprocessing and weights before using a saved head in the UI; then check qualitative transfer on permitted audio. The public dataset's attribution/license terms and each audio example's metadata must be respected if examples are ever distributed.
+
+## Inference on uploaded audio (2026-10-14)
+
+`ohrin/vggish.py` reproduces the AudioSet VGGish front end and uses the torchvggish port weights plus Google's PCA parameters (not distributed in this repository; place them in `data/vggish/`). On 8 official OpenMIC OGG clips, extracted embeddings had a mean absolute difference of 2-6 (0-255 scale) from the stored features on 7 clips and 22.9 on one quiet clip; head probabilities changed by at most 0.07, with one threshold flip in 16 clip-head pairs. This is a small compatibility check, not a re-evaluation.
+
+Measured on a CPU-only laptop (6 threads): about 0.35 s warm for a 10 s clip including upload handling, 0.85 s on the first call (model load), and about 1.3 s for an 85 s passage. Segments shorter than 10 s are out of distribution for the heads (trained on 10 s means). Performance on full commercial mixes, as opposed to 10 s OpenMIC clips, has not been measured.

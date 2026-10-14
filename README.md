@@ -2,7 +2,7 @@
 
 Derived from the German word “Ohren”, meaning “ears”.
 
-Status: local first-slice implementation in progress. The browser workflow and signal analysis are implemented and core interactions have been exercised. The four-class OpenMIC model has real held-out results; compatible inference on user audio and note-export verification remain pending.
+Status: local first-slice implementation in progress. The browser workflow, signal analysis, note export and a four-class OpenMIC instrument-candidate model are implemented. The model has real held-out OpenMIC results; its behaviour on full commercial mixes is not validated.
 
 An open-source Python/ML project with a browser UI for guitarists learning by ear and producers studying reference tracks. Help users understand a passage, recreate a playable interpretation, and develop original ideas inspired by its musical character.
 
@@ -51,7 +51,7 @@ The [four-class OpenMIC task](docs/model-card.md) has a training and evaluation 
 python3 -m experiments.train_openmic --data-root data/openmic-2018
 ```
 
-Results and checkpoints are written to ignored `outputs/`. The current held-out macro average precision is 0.550 for class prior, 0.915 for linear, and 0.919 for MLP. Precomputed VGGish features are used for training; the app does not yet infer instrument labels on user audio. No hosting provider or public deployment has been selected.
+Results and checkpoints are written to ignored `outputs/`. The current held-out macro average precision is 0.550 for class prior, 0.915 for linear, and 0.919 for MLP. Precomputed VGGish features are used for training; the app can show instrument candidates for uploaded passages when the ignored local VGGish weights (`data/vggish/`) and a saved head (`outputs/openmic-mlp.pt`) are present; these are uncertain model outputs, not transcriptions. No hosting provider or public deployment has been selected.
 
 ## License
 
