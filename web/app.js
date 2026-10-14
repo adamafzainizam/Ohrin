@@ -1,6 +1,6 @@
 import { clampSelection, shouldLoop, shouldStop, formatTime, measuredObservations, timeToFraction, instrumentTimeline,
   emptyReview, reviewKey, candidateTarget, segmentTarget, setLabel, reconcileReview, pruneReview, reviewSummary,
-  settleRequest, dragExceeded, uncoveredCaption, reviewTallyText, buildPassageNote } from './state.mjs';
+  settleRequest, dragExceeded, isPrimaryPress, primaryButtonHeld, resolveDrag, uncoveredCaption, reviewTallyText, buildPassageNote } from './state.mjs';
 
 const $ = id => document.getElementById(id);
 const fileInput = $('audioFile');
@@ -23,7 +23,12 @@ let selectedSegment = null;
 function setText(id, value) { $(id).textContent = value; }
 function setTextIfChanged(id, value) { if ($(id).textContent !== value) $(id).textContent = value; }
 function resetAnalyzeButton() { $('analyzeButton').innerHTML = 'Analyse passage <span>↗</span>'; }
-function announce(text) { setTextIfChanged('liveStatus', text); }
+function announce(text) {
+  // Clear first so an identical repeated message is announced again.
+  const region = $('liveStatus');
+  region.textContent = '';
+  setTimeout(() => { region.textContent = text; }, 50);
+}
 function clearPassageFindings() {
   analysis = null;
   review = emptyReview();
@@ -85,6 +90,10 @@ function updateSelection(start, end) {
   const next = clampSelection(start, end, player.duration);
   if (next.start !== selection.start || next.end !== selection.end) clearPassageFindings();
   selection = next;
+  refreshSelectionUI();
+}
+
+function refreshSelectionUI() {
   $('startTime').value = selection.start.toFixed(1);
   $('endTime').value = selection.end.toFixed(1);
   setText('selectionLabel', `${formatTime(selection.start)}–${formatTime(selection.end)} · ${(selection.end - selection.start).toFixed(1)} seconds selected`);
@@ -129,24 +138,44 @@ function timeAtPointer(event) {
   const box = canvas.getBoundingClientRect();
   return Math.max(0, Math.min(player.duration, (event.clientX - box.left) / box.width * player.duration));
 }
+let dragPointerId = null;
+let selectionBeforeDrag = null;
+function endDrag() { dragStart = null; dragging = false; dragPointerId = null; selectionBeforeDrag = null; }
+function abandonDrag() {
+  // Put back the selection from before the drag; findings were never touched during the preview.
+  if (selectionBeforeDrag) { selection = selectionBeforeDrag; refreshSelectionUI(); }
+  endDrag();
+}
 canvas.addEventListener('pointerdown', event => {
   if (!file || !Number.isFinite(player.duration)) return;
+  if (!isPrimaryPress(event)) return;
   dragStart = timeAtPointer(event); dragStartX = event.clientX; dragging = false;
+  dragPointerId = event.pointerId; selectionBeforeDrag = { ...selection };
   canvas.setPointerCapture(event.pointerId);
 });
 canvas.addEventListener('pointermove', event => {
   if (dragStart === null) return;
+  if (event.pointerId !== dragPointerId || !primaryButtonHeld(event)) { abandonDrag(); return; }
   if (!dragging && dragExceeded(dragStartX, event.clientX)) dragging = true;
-  if (dragging) updateSelection(dragStart, timeAtPointer(event));
+  // Preview only: findings are cleared on commit, not while moving.
+  if (dragging) { selection = clampSelection(dragStart, timeAtPointer(event), player.duration); refreshSelectionUI(); }
 });
 canvas.addEventListener('pointerup', event => {
-  if (dragStart === null) return;
+  if (dragStart === null || event.pointerId !== dragPointerId) return;
   const end = timeAtPointer(event);
-  if (dragging) updateSelection(dragStart, end);
-  else player.currentTime = end; // a click, not a drag: seek only, keep the selection and findings
-  dragStart = null; dragging = false;
+  const outcome = resolveDrag({ startX: dragStartX, endX: event.clientX, startS: dragStart, endS: end });
+  const previous = selectionBeforeDrag, from = dragStart;
+  endDrag();
+  if (outcome === 'commit') {
+    selection = previous; // so updateSelection sees the change and clears stale findings once
+    updateSelection(from, end);
+  } else {
+    selection = previous; refreshSelectionUI();
+    if (event.button === 0) player.currentTime = end; // a click: seek only, keep selection and findings
+  }
 });
-canvas.addEventListener('pointercancel', () => { dragStart = null; dragging = false; });
+canvas.addEventListener('pointercancel', abandonDrag);
+canvas.addEventListener('lostpointercapture', abandonDrag);
 for (const id of ['startTime', 'endTime']) $(id).addEventListener('change', () => updateSelection(Number($('startTime').value), Number($('endTime').value)));
 $('speed').addEventListener('change', () => { player.playbackRate = Number($('speed').value); player.preservesPitch = true; });
 $('playButton').addEventListener('click', () => {
@@ -331,7 +360,7 @@ function drawBlockStrip(tl) {
   strip.replaceChildren();
   const count = tl.rows[0].cells.length;
   if (rovingSegment >= count) rovingSegment = 0;
-  const active = selectedSegment ?? rovingSegment;
+  const active = rovingSegment;
   const buttons = [];
   tl.rows[0].cells.forEach((c, i) => {
     const marks = tl.rows.map(r => review.labels[segmentTarget(i, r.name)] && `${r.name}: ${MARK_TEXT[review.labels[segmentTarget(i, r.name)]]}`).filter(Boolean);

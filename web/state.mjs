@@ -171,6 +171,26 @@ export function dragExceeded(startX, currentX, thresholdPx = DRAG_THRESHOLD_PX) 
   return Math.abs(b - a) >= thresholdPx;
 }
 
+export const MIN_SELECTION_S = 0.3;
+
+// Only the primary button of the primary pointer starts a drag.
+export function isPrimaryPress(event) {
+  return Boolean(event) && event.button === 0 && event.isPrimary !== false;
+}
+
+// During a move, a drag only continues while the primary button is still held.
+export function primaryButtonHeld(event) {
+  return Boolean(event) && (Number(event.buttons) & 1) === 1;
+}
+
+// 'commit' only when the pointer travelled past the threshold AND the span is long enough;
+// otherwise 'click' (seek only, previous selection and findings untouched).
+export function resolveDrag({ startX, endX, startS, endS }, thresholdPx = DRAG_THRESHOLD_PX, minSpanS = MIN_SELECTION_S) {
+  if (!dragExceeded(startX, endX, thresholdPx)) return 'click';
+  const span = Math.abs(Number(endS) - Number(startS));
+  return Number.isFinite(span) && span >= minSpanS ? 'commit' : 'click';
+}
+
 export function reviewTallyText(classes, review) {
   const list = Array.isArray(classes) ? classes : [];
   const counts = { heard: 0, not_heard: 0, unsure: 0 };

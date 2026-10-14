@@ -5,7 +5,7 @@ import {
   timeToFraction, instrumentTimeline, SEGMENT_NOMINAL_S,
   LABELS, emptyReview, reviewKey, candidateTarget, segmentTarget, setLabel, toggleLabel,
   reconcileReview, pruneReview, reviewSummary, isStaleResponse, settleRequest,
-  dragExceeded, DRAG_THRESHOLD_PX, uncoveredCaption, reviewTallyText,
+  dragExceeded, DRAG_THRESHOLD_PX, isPrimaryPress, primaryButtonHeld, resolveDrag, uncoveredCaption, reviewTallyText,
   NOTE_SCHEMA, NOTE_SCHEMA_VERSION, buildPassageNote,
 } from '../web/state.mjs';
 
@@ -290,4 +290,23 @@ test('reviewTallyText counts candidate marks and block marks', () => {
   assert.equal(reviewTallyText(classes, r), 'You marked 0 of 2 candidates.');
   r = setLabel(r, 'class:guitar', 'heard'); r = setLabel(r, 'seg:0:bass', 'unsure');
   assert.equal(reviewTallyText(classes, r), 'You marked 1 of 2 candidates (1 heard). 1 block mark set.');
+});
+
+test('only the primary button of the primary pointer starts a drag', () => {
+  assert.equal(isPrimaryPress({ button: 0, isPrimary: true }), true);
+  assert.equal(isPrimaryPress({ button: 2, isPrimary: true }), false);
+  assert.equal(isPrimaryPress({ button: 0, isPrimary: false }), false);
+});
+
+test('a move with no primary button held ends the drag', () => {
+  assert.equal(primaryButtonHeld({ buttons: 1 }), true);
+  assert.equal(primaryButtonHeld({ buttons: 0 }), false);
+  assert.equal(primaryButtonHeld({ buttons: 2 }), false);
+});
+
+test('a selection commits only past the pixel threshold and the minimum duration', () => {
+  assert.equal(resolveDrag({ startX: 100, endX: 160, startS: 5, endS: 9 }), 'commit');
+  assert.equal(resolveDrag({ startX: 100, endX: 101, startS: 5, endS: 9 }), 'click');
+  assert.equal(resolveDrag({ startX: 100, endX: 160, startS: 5, endS: 5.1 }), 'click');
+  assert.equal(resolveDrag({ startX: 100, endX: 40, startS: 9, endS: 5 }), 'commit');
 });
