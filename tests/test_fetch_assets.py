@@ -1,4 +1,5 @@
 import hashlib
+import http.client
 import io
 import re
 import tarfile
@@ -18,6 +19,31 @@ def sha(data):
 
 class FakeResponse(io.BytesIO):
     pass
+
+
+class EndlessResponse:
+    """A stream that never ends; counts bytes served and optionally announces a length."""
+    def __init__(self, headers=None):
+        self.served = 0
+        self.headers = headers or {}
+
+    def read(self, n=-1):
+        self.served += n
+        return b"x" * n
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class DyingResponse(io.BytesIO):
+    def read(self, n=-1):
+        data = super().read(n)
+        if not data:
+            raise http.client.IncompleteRead(b"")
+        return data
 
 
 class VGGishFetchTests(unittest.TestCase):
@@ -59,6 +85,48 @@ class VGGishFetchTests(unittest.TestCase):
         self.assertEqual(dest.read_bytes(), b"old")
         fetch_vggish.verify_or_download("http://x/w", dest, sha(b"abc"), opener=opener, force=True)
         self.assertEqual(dest.read_bytes(), b"abc")
+
+    def test_oversized_stream_is_aborted_early_and_leaves_nothing(self):
+        dest = self.dir / "w.bin"
+        stream = EndlessResponse()
+        with self.assertRaises(fetch_vggish.SizeExceeded):
+            fetch_vggish.verify_or_download("http://x/w", dest, sha(b"abc"), opener=lambda u, timeout: stream,
+                                            max_bytes=3 * 1024 * 1024)
+        self.assertLessEqual(stream.served, 4 * 1024 * 1024)
+        self.assertFalse(dest.exists())
+        self.assertFalse(dest.with_name("w.bin.part").exists())
+
+    def test_announced_oversize_is_rejected_before_reading(self):
+        stream = EndlessResponse(headers={"Content-Length": "999999999"})
+        with self.assertRaises(fetch_vggish.SizeExceeded):
+            fetch_vggish.verify_or_download("http://x/w", self.dir / "w.bin", sha(b"abc"),
+                                            opener=lambda u, timeout: stream, max_bytes=1000)
+        self.assertEqual(stream.served, 0)
+
+    def test_failed_forced_download_keeps_the_existing_file(self):
+        dest = self.dir / "w.bin"
+        dest.write_bytes(b"old")
+        with self.assertRaises(fetch_vggish.ChecksumMismatch):
+            fetch_vggish.verify_or_download("http://x/w", dest, sha(b"abc"), force=True,
+                                            opener=lambda u, timeout: FakeResponse(b"zzz"))
+        self.assertEqual(dest.read_bytes(), b"old")
+        self.assertFalse(dest.with_name("w.bin.part").exists())
+
+    def test_main_reports_http_errors_without_traceback(self):
+        err = io.StringIO()
+        with mock.patch.object(fetch_vggish, "verify_or_download", side_effect=http.client.IncompleteRead(b"x")), \
+                mock.patch("sys.stderr", err):
+            code = fetch_vggish.main(["--dest", str(self.dir / "v")])
+        self.assertEqual(code, 1)
+        self.assertIn("error:", err.getvalue())
+        self.assertNotIn("Traceback", err.getvalue())
+
+    def test_main_reports_oversize_cleanly(self):
+        err = io.StringIO()
+        with mock.patch.object(fetch_vggish, "verify_or_download", side_effect=fetch_vggish.SizeExceeded("too big")), \
+                mock.patch("sys.stderr", err):
+            self.assertEqual(fetch_vggish.main(["--dest", str(self.dir / "v")]), 1)
+        self.assertIn("too big", err.getvalue())
 
     def test_constants_match_recorded_checksums(self):
         by_name = {f["name"]: f for f in fetch_vggish.FILES}
@@ -122,6 +190,78 @@ class OpenMICFetchTests(unittest.TestCase):
             fetch_openmic.fetch_openmic(self.dir / "d", archive=archive,
                                         expected_md5=fetch_openmic.file_digest(archive, "md5"),
                                         expected_npz_sha=sha(b"other"), out=lambda m: None)
+
+    def _valid_members(self, npz=b"npz-bytes"):
+        return {"openmic-2018/openmic-2018.npz": npz, "openmic-2018/class-map.json": b"{}",
+                "openmic-2018/partitions/split01_train.csv": b"a\n", "openmic-2018/partitions/split01_test.csv": b"b\n"}
+
+    def test_failed_extraction_leaves_previous_good_files_and_no_staging(self):
+        dest = self.dir / "out" / "openmic-2018"
+        good = self.dir / "good.tgz"
+        make_tgz(good, self._valid_members())
+        fetch_openmic.fetch_openmic(dest, archive=good, expected_md5=fetch_openmic.file_digest(good, "md5"),
+                                    expected_npz_sha=sha(b"npz-bytes"), out=lambda m: None)
+        before = {p.name: p.read_bytes() for p in dest.rglob("*") if p.is_file()}
+        bad = self.dir / "bad.tgz"
+        make_tgz(bad, self._valid_members(npz=b"tampered"))
+        with self.assertRaises(RuntimeError):
+            fetch_openmic.fetch_openmic(dest, archive=bad, expected_md5=fetch_openmic.file_digest(bad, "md5"),
+                                        expected_npz_sha=sha(b"npz-bytes"), out=lambda m: None)
+        self.assertEqual({p.name: p.read_bytes() for p in dest.rglob("*") if p.is_file()}, before)
+        self.assertEqual([p.name for p in dest.parent.iterdir()], ["openmic-2018"])
+
+    def test_checksum_failure_on_fresh_destination_creates_nothing_final(self):
+        archive = self.dir / "o.tgz"
+        make_tgz(archive, self._valid_members())
+        out_dir = self.dir / "fresh"
+        with self.assertRaises(RuntimeError):
+            fetch_openmic.fetch_openmic(out_dir / "openmic-2018", archive=archive,
+                                        expected_md5=fetch_openmic.file_digest(archive, "md5"),
+                                        expected_npz_sha=sha(b"other"), out=lambda m: None)
+        self.assertEqual(list(out_dir.iterdir()), [])
+
+    def test_missing_member_is_an_error_and_cleans_up(self):
+        archive = self.dir / "o.tgz"
+        members = self._valid_members(); del members["openmic-2018/class-map.json"]
+        make_tgz(archive, members)
+        with self.assertRaises(RuntimeError):
+            fetch_openmic.fetch_openmic(self.dir / "out" / "d", archive=archive,
+                                        expected_md5=fetch_openmic.file_digest(archive, "md5"),
+                                        expected_npz_sha=sha(b"npz-bytes"), out=lambda m: None)
+        self.assertEqual(list((self.dir / "out").iterdir()), [])
+
+    def test_symlinked_partitions_directory_is_refused(self):
+        archive = self.dir / "o.tgz"
+        make_tgz(archive, self._valid_members())
+        elsewhere = self.dir / "elsewhere"; elsewhere.mkdir()
+        dest = self.dir / "out" / "d"; dest.mkdir(parents=True)
+        (dest / "partitions").symlink_to(elsewhere)
+        with self.assertRaises(RuntimeError):
+            fetch_openmic.fetch_openmic(dest, archive=archive, expected_md5=fetch_openmic.file_digest(archive, "md5"),
+                                        expected_npz_sha=sha(b"npz-bytes"), out=lambda m: None)
+        self.assertEqual(list(elsewhere.iterdir()), [])
+
+    def test_oversized_download_is_aborted_early(self):
+        stream = EndlessResponse()
+        target = self.dir / "o.tgz"
+        with self.assertRaises(RuntimeError):
+            fetch_openmic.download("http://x", target, "0" * 32, opener=lambda u, timeout: stream,
+                                   max_bytes=2 * 1024 * 1024)
+        self.assertLessEqual(stream.served, 3 * 1024 * 1024)
+        self.assertFalse(target.exists())
+        self.assertFalse(target.with_name("o.tgz.part").exists())
+
+    def test_main_turns_tar_and_http_errors_into_friendly_exit_codes(self):
+        garbage = self.dir / "g.tgz"
+        garbage.write_bytes(b"this is not a tar archive")
+        md5 = fetch_openmic.file_digest(garbage, "md5")
+        with self.assertRaises(tarfile.TarError):
+            fetch_openmic.fetch_openmic(self.dir / "d", archive=garbage, expected_md5=md5, out=lambda m: None)
+        for exc in (tarfile.ReadError("bad"), http.client.IncompleteRead(b"x"), EOFError("truncated")):
+            err = io.StringIO()
+            with mock.patch.object(fetch_openmic, "fetch_openmic", side_effect=exc), mock.patch("sys.stderr", err):
+                self.assertEqual(fetch_openmic.main(["--dest", str(self.dir / "d")]), 1)
+            self.assertIn("error:", err.getvalue())
 
     def test_npz_constant_matches_training_module(self):
         text = (ROOT / "ohrin" / "instruments.py").read_text()

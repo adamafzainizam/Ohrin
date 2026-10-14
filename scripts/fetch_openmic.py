@@ -7,10 +7,14 @@ Stdlib only. Without --yes nothing is downloaded (the archive is about 2.6 GB).
 """
 import argparse
 import hashlib
+import http.client
 import os
+import shutil
 import sys
 import tarfile
+import tempfile
 import urllib.request
+import zlib
 from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -22,6 +26,7 @@ NPZ_SHA256 = "3e5f9252e2f983737d13f87a52b3ee02c8cad357f00531762490b31f18d3e62e"
 ALLOWLIST = ("openmic-2018.npz", "class-map.json", "partitions/split01_train.csv", "partitions/split01_test.csv")
 CHUNK = 1024 * 1024
 TIMEOUT_S = 60
+SIZE_SLACK = 1024 * 1024  # tolerated bytes beyond the documented archive size
 
 
 def file_digest(path, algorithm):
@@ -32,7 +37,9 @@ def file_digest(path, algorithm):
     return digest.hexdigest()
 
 
-def download(url, target, expected_md5, opener=urllib.request.urlopen, progress=None):
+def download(url, target, expected_md5, opener=urllib.request.urlopen, progress=None,
+             max_bytes=ARCHIVE_BYTES + SIZE_SLACK):
+    """Stream to `<target>.part`, stop early past `max_bytes`, rename only after the MD5 matches."""
     target = Path(target)
     target.parent.mkdir(parents=True, exist_ok=True)
     part = target.with_name(target.name + ".part")
@@ -40,10 +47,15 @@ def download(url, target, expected_md5, opener=urllib.request.urlopen, progress=
     done = 0
     try:
         with opener(url, timeout=TIMEOUT_S) as response, open(part, "wb") as out:
+            declared = getattr(getattr(response, "headers", None), "get", lambda *_: None)("Content-Length")
+            if declared and declared.isdigit() and int(declared) > max_bytes:
+                raise RuntimeError(f"server announced {declared} bytes, more than the expected {max_bytes}; aborting")
             for chunk in iter(lambda: response.read(CHUNK), b""):
+                done += len(chunk)
+                if done > max_bytes:
+                    raise RuntimeError(f"download exceeded the expected size of {max_bytes} bytes; aborting")
                 out.write(chunk)
                 digest.update(chunk)
-                done += len(chunk)
                 if progress:
                     progress(done)
         if digest.hexdigest() != expected_md5:
@@ -96,6 +108,19 @@ def extract_allowlisted(archive, dest):
     return sorted(found)
 
 
+def _promote(staging, dest, names):
+    """Move verified files into `dest`; refuse symlinked destinations."""
+    dest = Path(dest)
+    dest.mkdir(parents=True, exist_ok=True)
+    targets = [dest / rel for rel in names]
+    for target in targets:
+        if target.parent.is_symlink() or target.is_symlink():
+            raise RuntimeError(f"refusing to write through a symlink: {target}")
+    for rel, target in zip(names, targets):
+        target.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(staging / rel, target)
+
+
 def fetch_openmic(dest, archive=None, yes=False, opener=urllib.request.urlopen,
                   expected_md5=ARCHIVE_MD5, expected_npz_sha=NPZ_SHA256, url=URL, out=print):
     dest = Path(dest)
@@ -114,10 +139,16 @@ def fetch_openmic(dest, archive=None, yes=False, opener=urllib.request.urlopen,
     digest = file_digest(archive, "md5")
     if digest != expected_md5:
         raise RuntimeError(f"archive checksum mismatch: expected MD5 {expected_md5}, got {digest}")
-    names = extract_allowlisted(archive, dest)
-    npz_digest = file_digest(dest / "openmic-2018.npz", "sha256")
-    if npz_digest != expected_npz_sha:
-        raise RuntimeError(f"openmic-2018.npz checksum mismatch: expected {expected_npz_sha}, got {npz_digest}")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=".openmic-staging-", dir=dest.parent))
+    try:
+        names = extract_allowlisted(archive, staging)
+        npz_digest = file_digest(staging / "openmic-2018.npz", "sha256")
+        if npz_digest != expected_npz_sha:
+            raise RuntimeError(f"openmic-2018.npz checksum mismatch: expected {expected_npz_sha}, got {npz_digest}")
+        _promote(staging, dest, names)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
     out(f"Extracted {len(names)} files to {dest}; NPZ SHA-256 verified.")
     out(f"The archive was kept at {archive}; delete it yourself if you no longer need it.")
     return 0
@@ -131,7 +162,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         return fetch_openmic(args.dest, archive=args.archive, yes=args.yes)
-    except (RuntimeError, OSError) as exc:
+    except (RuntimeError, OSError, tarfile.TarError, http.client.HTTPException, EOFError, zlib.error) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 

@@ -8,6 +8,7 @@ repository. Stdlib only. Usage:
 """
 import argparse
 import hashlib
+import http.client
 import os
 import sys
 import urllib.request
@@ -16,6 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CHUNK = 1024 * 1024
 TIMEOUT_S = 60
+SIZE_SLACK = 1024 * 1024
 
 FILES = [
     {
@@ -41,6 +43,10 @@ class ExistingFileInvalid(RuntimeError):
     pass
 
 
+class SizeExceeded(RuntimeError):
+    pass
+
+
 def sha256_file(path):
     digest = hashlib.sha256()
     with open(path, "rb") as stream:
@@ -49,8 +55,11 @@ def sha256_file(path):
     return digest.hexdigest()
 
 
-def verify_or_download(url, dest, sha256, opener=urllib.request.urlopen, force=False, progress=None):
-    """Return "cached" or "downloaded". Never leaves a wrong file at `dest`."""
+def verify_or_download(url, dest, sha256, opener=urllib.request.urlopen, force=False, progress=None, max_bytes=None):
+    """Return "cached" or "downloaded". Never leaves a wrong file at `dest`.
+
+    Downloads go to `<dest>.part` and are renamed only after the checksum matches;
+    `max_bytes` aborts the stream early. A failed run leaves any existing file alone."""
     dest = Path(dest)
     if dest.exists():
         if sha256_file(dest) == sha256:
@@ -63,13 +72,18 @@ def verify_or_download(url, dest, sha256, opener=urllib.request.urlopen, force=F
     done = 0
     try:
         with opener(url, timeout=TIMEOUT_S) as response, open(part, "wb") as out:
+            declared = getattr(getattr(response, "headers", None), "get", lambda *_: None)("Content-Length")
+            if max_bytes is not None and declared and declared.isdigit() and int(declared) > max_bytes:
+                raise SizeExceeded(f"server announced {declared} bytes, more than the expected {max_bytes}; aborting")
             while True:
                 chunk = response.read(CHUNK)
                 if not chunk:
                     break
+                done += len(chunk)
+                if max_bytes is not None and done > max_bytes:
+                    raise SizeExceeded(f"download exceeded the expected size of {max_bytes} bytes; aborting")
                 out.write(chunk)
                 digest.update(chunk)
-                done += len(chunk)
                 if progress:
                     progress(done)
         if digest.hexdigest() != sha256:
@@ -94,12 +108,13 @@ def main(argv=None):
             sys.stderr.flush()
 
         try:
-            state = verify_or_download(item["url"], target, item["sha256"], force=args.force, progress=progress)
-        except (ChecksumMismatch, ExistingFileInvalid) as exc:
+            state = verify_or_download(item["url"], target, item["sha256"], force=args.force, progress=progress,
+                                      max_bytes=item["size"] + SIZE_SLACK)
+        except (ChecksumMismatch, ExistingFileInvalid, SizeExceeded) as exc:
             sys.stderr.write("\n")
             print(f"error: {exc}", file=sys.stderr)
             return 1
-        except OSError as exc:
+        except (OSError, http.client.HTTPException) as exc:
             sys.stderr.write("\n")
             print(f"error: download failed: {exc}", file=sys.stderr)
             return 1
