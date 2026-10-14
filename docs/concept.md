@@ -1,70 +1,61 @@
-# Ohrin — Vision and first-version baseline
+# Ohrin: vision and first-version baseline
 
-Project name chosen by Adam: **Ohrin**, derived from German “Ohren” (ears).
-Recorded: 2026-10-11. Stage: discovery, before implementation.
+Ohrin takes its name from the German "Ohren" (ears). This document keeps the long-term ambition separate from what is built. For current status, see the [README](../README.md) and the [model card](model-card.md).
 
 ## Overall ambition
 
-Ohrin is an interactive music-analysis and creative-reference workbench. A listener should be able to bring a song, understand its musical construction and character, and turn that understanding into a playable interpretation or original creative direction.
+Ohrin is an interactive music-analysis and creative-reference workbench. A listener brings a song, works out how it is built and what character it has, and turns that into a playable interpretation or an original creative direction.
 
 The broader ambition includes:
+
 - Key, tempo, beats, harmony, and notes active over time, including changes between passages.
 - Genre and subgenre candidates, with room for mixed styles and disagreement.
 - Instruments, their roles and activity, and possible performance details such as guitar tuning.
-- Arrangement, texture, dynamics, energy, and how sections create or release tension.
-- Overall vibe and suitability for contexts, from a hype boxing walkout to a funeral or wake. These are subjective and culturally dependent interpretations, not objective labels.
-- Help recreating a song or its overall feeling, and actionable exercises to help artists through creative block.
+- Arrangement, texture, dynamics, energy, and how sections build or release tension.
+- Overall vibe and suitability for contexts, from a boxing walkout to a funeral. These are subjective, culture-dependent interpretations, not objective labels.
+- Help recreating a song or its overall feeling, and practical exercises for getting past creative block.
 
-The UI is a core product requirement: people must be able to use and explore the analysis, not merely view a notebook or static report. Ideally, observations link to audible passages and allow user corrections.
+The UI is a core requirement. People should be able to use and explore the analysis, and ideally observations link to audible passages and accept user corrections.
 
-Primary initial audiences, explicitly chosen by Adam:
-1. Guitarists learning by ear.
-2. Producers studying arrangements.
+The first audiences are guitarists learning by ear and producers studying arrangements.
 
-Proposed organising modes (not yet a final UI design):
-- **Recreate:** understand and play a plausible interpretation of a reference.
-- **Reimagine:** use selected characteristics to develop original musical ideas.
+Two organising modes are proposed (not a final UI design):
 
-This is a new Python/ML portfolio project, not an extension of an existing app. It should be impressive to interact with and demonstrate meaningful model training and evaluation. Existing models can support the product, but an API wrapper alone would not fulfil the intended ML learning goal.
+- Recreate: understand and play a plausible interpretation of a reference.
+- Reimagine: use selected characteristics to develop original musical ideas.
 
-## First-version baseline — accomplish this first
+Ohrin is meant to be a new Python/ML project with meaningful model training and evaluation. Existing models can support it, but an API wrapper alone would not meet that goal.
 
-Preserve the larger vision above while beginning with a bounded **“break down this passage”** workflow. This is the planning baseline distilled from the conversation, not a claim that every feature has been technically validated or that a final implementation design was approved.
+## First-version baseline
 
-1. **Usable passage workflow:** upload a track, play it, select and loop a passage, and inspect analysis aligned with playback in a browser UI.
-2. **Core musical analysis:** estimated tempo and key/chords for the selected passage, with uncertainty and limitations visible.
-3. **Guitarist value:** a simplified riff/melody or chord interpretation that can be tried on guitar; slowed playback and possible fingerings are candidate aids. Exact outputs depend on the feasibility investigation.
-4. **Producer value:** an account of likely instrument roles and how the passage's arrangement or energy develops, tied to timestamps where possible.
-5. **Creative value:** a small number of actionable, evidence-linked exercises for recreating or changing the passage's feeling. Keep suggestions distinct from measured findings.
-6. **ML evidence:** select one bounded task for original training/evaluation, compare a simple baseline with the chosen model, document held-out performance, latency, and failure cases. The reference song is a qualitative case study, not a benchmark or training dataset by default.
+The first version starts with a bounded "break down this passage" workflow while keeping the larger vision above. This is a planning baseline, not a claim that every feature has been technically validated.
 
-Deliver the shared passage workflow and a credible, evaluated analysis slice before broadening to whole-song detail. The guitarist and producer perspectives both remain requirements; the exact depth of each is unresolved.
+1. Passage workflow: load a track, play it, select and loop a passage, and inspect analysis aligned with playback in a browser UI.
+2. Core musical analysis: estimated tempo and key or chords for the selected passage, with uncertainty and limitations visible.
+3. Guitarist value: a simplified riff, melody or chord interpretation to try on guitar. Slowed playback and possible fingerings are candidate aids, and exact outputs depend on feasibility.
+4. Producer value: likely instrument roles and how the arrangement or energy develops, tied to timestamps where possible.
+5. Creative value: a few actionable, evidence-linked exercises for recreating or changing a passage's feeling, kept distinct from measured findings.
+6. ML evidence: one bounded task for original training and evaluation, a simple baseline compared with the chosen model, and documented held-out performance, latency and failure cases.
 
-Do not make exhaustive full-mix note transcription, exact tuning recovery, detailed subgenre recognition, source separation, or comprehensive occasion recommendations prerequisites for this first version. They remain longer-term candidates to investigate, not promised capabilities.
+The shared passage workflow and a credible, evaluated analysis slice come before whole-song detail. Both the guitarist and producer perspectives remain requirements, and the depth of each is still open.
 
-## First reference and immediate milestone
+Exhaustive full-mix note transcription, exact tuning recovery, detailed subgenre recognition, source separation and comprehensive occasion recommendations are not prerequisites for the first version. They are longer-term candidates to investigate, not promised capabilities.
 
-- Artist: Deftones.
-- Track: “i think about you all the time”.
-- Focus: **02:44 (164 seconds) through the end** of the full recording.
-- Input location: `audio/reference/`.
-- At handoff: folder exists and is empty; audio has not been received, listened to, or analysed.
+## Reference recordings
 
-After audio arrives, inspect the actual file and passage, identify useful outputs for both audiences, and establish what can be measured reliably. Then propose a concrete first-version design and bounded ML task. Do not invent song-specific observations from its title or artist.
+During development the maintainer used one private recording as a qualitative case study. It is not distributed, is not a benchmark, is not training data, and is not part of this repository. A recording you analyse locally stays on your machine.
+
+Look at the actual file and passage before drawing conclusions. Do not infer song-specific observations from a title or an artist name.
 
 ## Technical honesty
 
-- Notes in a dense mix and exact instrument identities can be difficult to recover.
-- The same pitches can be played with different guitar tunings and fingerings. A suggested tab is one playable interpretation, not proof of the original performance.
-- Key and tempo can be ambiguous or vary across sections.
-- Mood, genre, and occasion suitability can have multiple valid interpretations.
-- Confidence must be evaluated rather than assumed to equal correctness.
-- Keep measured outputs, inferred explanations, and creative suggestions distinguishable.
+- Notes in a dense mix and exact instrument identities can be hard to recover.
+- The same pitches can be played with different tunings and fingerings. A suggested tab is one playable interpretation, not proof of the original performance.
+- Key and tempo can be ambiguous or change between sections.
+- Mood, genre and occasion suitability have more than one valid reading.
+- A confidence score is not evidence of correctness until it has been evaluated.
+- Measured outputs, inferred explanations and creative suggestions should stay distinguishable.
 
-## Unresolved decisions
+## Open decisions
 
-Dataset and usage rights; training task and metrics; compute and cost budget; model architectures; use of pretrained components; UI design and stack; hosting; audio retention; implementation timeline. Nothing has been installed or implemented and no stack has been chosen.
-
-## Earlier candidate preserved
-
-The environmental Audio Scene Explorer remains a separate potential project at `../project-ideas/audio-scene-explorer.md` relative to the Ohrin project root. It was not silently converted into Ohrin; its environmental classes and top-three predictions are not Ohrin requirements.
+Dataset and usage rights beyond OpenMIC, further training tasks and metrics, compute and cost budget, whether larger or better-suited models are needed, packaging, audio retention and the implementation timeline.
