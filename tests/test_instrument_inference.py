@@ -1,5 +1,6 @@
 import importlib.util
 import unittest
+from pathlib import Path
 from unittest import mock
 
 import numpy as np
@@ -35,6 +36,44 @@ class ModelAvailabilityTests(unittest.TestCase):
             model, reason = inference.get_model()
         self.assertIsNone(model)
         self.assertIn("PyTorch", reason)
+
+    def test_other_import_errors_are_not_reported_as_missing_torch(self):
+        err = ImportError("No module named 'scipy'", name="scipy")
+        with mock.patch.object(InstrumentModel, "load", side_effect=err):
+            model, reason = inference.get_model()
+        self.assertIsNone(model)
+        self.assertNotIn("PyTorch is not installed", reason)
+        self.assertIn("scipy", reason)
+
+    def test_torch_import_error_by_name_is_reported_as_missing_torch(self):
+        err = ImportError("No module named 'torch'", name="torch")
+        with mock.patch.object(InstrumentModel, "load", side_effect=err):
+            _, reason = inference.get_model()
+        self.assertIn("PyTorch is not installed", reason)
+
+    def test_corrupt_checkpoint_becomes_unavailable_with_reason(self):
+        with mock.patch.object(InstrumentModel, "load", side_effect=RuntimeError("PytorchStreamReader failed")):
+            out = inference.predict_or_unavailable("x.wav", 0.0, 10.0)
+        self.assertFalse(out["available"])
+        self.assertIn("could not be loaded", out["reason"])
+        self.assertIn("restart", out["reason"])
+
+    @unittest.skipUnless(HAS_TORCH, "PyTorch not installed")
+    def test_real_corrupt_checkpoint_file_is_reported_not_raised(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            for name in ("vggish-10086976.pth", "vggish_pca_params.npz"):
+                (d / name).write_bytes(b"x")
+            ckpt = d / "bad.pt"
+            ckpt.write_bytes(b"not a checkpoint")
+            real_load = InstrumentModel.load.__func__
+            with mock.patch.object(InstrumentModel, "load",
+                                   classmethod(lambda cls: real_load(cls, weights_dir=d, checkpoint=ckpt))):
+                model, reason = inference.get_model()
+        self.assertIsNone(model)
+        self.assertTrue(reason)
+        self.assertNotIn("PyTorch is not installed", reason)
 
 
 @unittest.skipUnless(HAS_TORCH, "PyTorch not installed")

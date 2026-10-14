@@ -88,10 +88,18 @@ def get_model():
     if "result" not in _cached:
         try:
             _cached["result"] = (InstrumentModel.load(), None)
-        except ImportError:
-            _cached["result"] = (None, "PyTorch is not installed; instrument candidates are unavailable. See README.")
+        except ImportError as exc:
+            if (getattr(exc, "name", None) or "").split(".")[0] == "torch" or "torch" in str(exc).lower():
+                reason = "PyTorch is not installed; instrument candidates are unavailable. See README."
+            else:
+                reason = (f"A dependency could not be imported ({type(exc).__name__}: {exc}); "
+                          "instrument candidates are unavailable. Fix it and restart the server.")
+            _cached["result"] = (None, reason)
         except FileNotFoundError as exc:
             _cached["result"] = (None, f"Missing local file: {exc}. See docs/model-card.md.")
+        except Exception as exc:  # corrupt or incompatible weights/checkpoint: report, do not drop the request
+            _cached["result"] = (None, f"The instrument model could not be loaded ({type(exc).__name__}: {exc}). "
+                                       "Check the weights and checkpoint, then restart the server.")
     return _cached["result"]
 
 
