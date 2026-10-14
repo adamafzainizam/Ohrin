@@ -35,3 +35,220 @@ export function measuredObservations(windows) {
   }
   return remarks;
 }
+
+export const SEGMENT_NOMINAL_S = 9.6;
+const EDGE_TOLERANCE_S = 0.05;
+
+export function timeToFraction(t, passage) {
+  const start = Number(passage?.start_s);
+  const end = Number(passage?.end_s);
+  const value = Number(t);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || !Number.isFinite(value) || end - start <= 0) return 0;
+  return Math.max(0, Math.min(1, (value - start) / (end - start)));
+}
+
+export function instrumentTimeline(instruments, passage) {
+  if (!instruments?.available || !Array.isArray(instruments.segments) || !instruments.segments.length) return null;
+  const segments = instruments.segments;
+  const classes = Array.isArray(instruments.classes) ? instruments.classes : [];
+  if (!classes.length) return null;
+  const rows = classes.map(c => ({
+    name: c.name,
+    threshold: c.threshold,
+    cells: segments.map((s, index) => {
+      const raw = s.probabilities?.[c.name];
+      const probability = typeof raw === 'number' && Number.isFinite(raw) ? raw : null;
+      const left = timeToFraction(s.start_s, passage);
+      const right = timeToFraction(s.end_s, passage);
+      return {
+        index, start_s: s.start_s, end_s: s.end_s, probability,
+        above: probability !== null && probability >= c.threshold,
+        short: s.end_s - s.start_s < SEGMENT_NOMINAL_S - EDGE_TOLERANCE_S,
+        left, width: Math.max(0, right - left),
+      };
+    }),
+  }));
+  const uncovered = [];
+  const pStart = Number(passage?.start_s), pEnd = Number(passage?.end_s);
+  if (Number.isFinite(pStart) && Number.isFinite(pEnd)) {
+    let cursor = pStart;
+    for (const s of [...segments].sort((a, b) => a.start_s - b.start_s)) {
+      if (s.start_s - cursor > EDGE_TOLERANCE_S) {
+        uncovered.push({ start_s: cursor, end_s: s.start_s, position: cursor === pStart ? 'start' : 'middle' });
+      }
+      cursor = Math.max(cursor, s.end_s);
+    }
+    if (pEnd - cursor > EDGE_TOLERANCE_S) uncovered.push({ start_s: cursor, end_s: pEnd, position: 'end' });
+  }
+  const shortCount = segments.filter(s => s.end_s - s.start_s < SEGMENT_NOMINAL_S - EDGE_TOLERANCE_S).length;
+  return { resolution_s: SEGMENT_NOMINAL_S, rows, uncovered, shortCount };
+}
+
+export function uncoveredCaption(uncovered) {
+  const parts = [];
+  for (const u of Array.isArray(uncovered) ? uncovered : []) {
+    const len = (u.end_s - u.start_s).toFixed(1);
+    if (u.position === 'end') parts.push(`The final ${len} s was not scored.`);
+    else if (u.position === 'start') parts.push(`The first ${len} s was not scored.`);
+    else parts.push(`${len} s between ${formatTime(u.start_s)} and ${formatTime(u.end_s)} was not scored.`);
+  }
+  return parts.join(' ');
+}
+
+export const LABELS = Object.freeze(['heard', 'not_heard', 'unsure']);
+const TARGET_PATTERN = /^(class:[a-z0-9_]+|seg:\d+:[a-z0-9_]+)$/;
+
+export function emptyReview(key = null) { return { key, labels: {} }; }
+
+export function reviewKey(fileMeta, passage) {
+  if (!fileMeta || !passage) return null;
+  const { name, size, lastModified } = fileMeta;
+  const { start_s, end_s } = passage;
+  const parts = [name, size, lastModified, start_s, end_s];
+  if (parts.some(p => p === undefined || p === null || p === '')) return null;
+  return parts.join('|');
+}
+
+export function candidateTarget(name) { return `class:${name}`; }
+export function segmentTarget(index, name) { return `seg:${index}:${name}`; }
+
+export function setLabel(review, target, label) {
+  if (typeof target !== 'string' || !TARGET_PATTERN.test(target)) throw new TypeError(`Invalid review target: ${target}`);
+  const labels = { ...review.labels };
+  if (label === null) delete labels[target];
+  else if (LABELS.includes(label)) labels[target] = label;
+  else throw new TypeError(`Invalid review label: ${label}`);
+  return { key: review.key, labels };
+}
+
+export function toggleLabel(review, target, label) {
+  return setLabel(review, target, review.labels[target] === label ? null : label);
+}
+
+export function reconcileReview(review, key) {
+  return key !== null && review.key === key ? review : emptyReview(key);
+}
+
+export function pruneReview(review, instruments) {
+  const names = new Set(instruments?.available && Array.isArray(instruments.classes) ? instruments.classes.map(c => c.name) : []);
+  const count = instruments?.available && Array.isArray(instruments.segments) ? instruments.segments.length : 0;
+  const labels = {};
+  for (const [target, label] of Object.entries(review.labels)) {
+    const [kind, a, b] = target.split(':');
+    if (kind === 'class' ? names.has(a) : (names.has(b) && Number(a) < count)) labels[target] = label;
+  }
+  return { key: review.key, labels };
+}
+
+export function reviewSummary(review) {
+  const out = { heard: 0, not_heard: 0, unsure: 0, total: 0 };
+  for (const label of Object.values(review.labels)) { out[label] += 1; out.total += 1; }
+  return out;
+}
+
+export function isStaleResponse(requested, current) {
+  return requested.file !== current.file
+    || requested.selection.start !== current.selection.start
+    || requested.selection.end !== current.selection.end
+    || (requested.id !== undefined && requested.id !== current.id);
+}
+
+// What a finished analysis request may touch. `stale` responses must not write
+// results or status text (success or failure). Only the latest request owns the
+// Analyse button, so an older request cannot re-enable it during a newer one.
+export function settleRequest(requested, current) {
+  return {
+    stale: isStaleResponse(requested, current),
+    ownsButton: requested.id === current.id,
+  };
+}
+
+export const DRAG_THRESHOLD_PX = 4;
+
+export function dragExceeded(startX, currentX, thresholdPx = DRAG_THRESHOLD_PX) {
+  const a = Number(startX), b = Number(currentX);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  return Math.abs(b - a) >= thresholdPx;
+}
+
+export const MIN_SELECTION_S = 0.3;
+
+// Only the primary button of the primary pointer starts a drag.
+export function isPrimaryPress(event) {
+  return Boolean(event) && event.button === 0 && event.isPrimary !== false;
+}
+
+// During a move, a drag only continues while the primary button is still held.
+export function primaryButtonHeld(event) {
+  return Boolean(event) && (Number(event.buttons) & 1) === 1;
+}
+
+// 'commit' only when the pointer travelled past the threshold AND the span is long enough;
+// otherwise 'click' (seek only, previous selection and findings untouched).
+export function resolveDrag({ startX, endX, startS, endS }, thresholdPx = DRAG_THRESHOLD_PX, minSpanS = MIN_SELECTION_S) {
+  if (!dragExceeded(startX, endX, thresholdPx)) return 'click';
+  const span = Math.abs(Number(endS) - Number(startS));
+  return Number.isFinite(span) && span >= minSpanS ? 'commit' : 'click';
+}
+
+export function reviewTallyText(classes, review) {
+  const list = Array.isArray(classes) ? classes : [];
+  const counts = { heard: 0, not_heard: 0, unsure: 0 };
+  let marked = 0;
+  for (const c of list) {
+    const label = review.labels[candidateTarget(c.name)];
+    if (label) { counts[label] += 1; marked += 1; }
+  }
+  const detail = [counts.heard && `${counts.heard} heard`, counts.not_heard && `${counts.not_heard} not heard`,
+    counts.unsure && `${counts.unsure} unsure`].filter(Boolean).join(', ');
+  const blocks = reviewSummary(review).total - marked;
+  return `You marked ${marked} of ${list.length} candidates${detail ? ` (${detail})` : ''}.`
+    + (blocks > 0 ? ` ${blocks} block mark${blocks === 1 ? '' : 's'} set.` : '');
+}
+
+export const NOTE_SCHEMA = 'ohrin.passage-note';
+export const NOTE_SCHEMA_VERSION = 2;
+const MARKS_LIMITATION = 'Listening marks are user judgements, not validation of the model.';
+
+function listeningReview(instruments, review) {
+  if (!instruments?.available) return null;
+  const classes = instruments.classes || [];
+  const segments = instruments.segments || [];
+  const candidates = classes.map(c => ({
+    instrument: c.name, model_score: c.probability, model_threshold: c.threshold,
+    model_above_threshold: c.above_threshold, your_label: review.labels[candidateTarget(c.name)] ?? null,
+  }));
+  const marked = [];
+  segments.forEach((s, index) => {
+    for (const c of classes) {
+      const label = review.labels[segmentTarget(index, c.name)];
+      if (!label) continue;
+      const score = s.probabilities?.[c.name];
+      marked.push({
+        index, start_s: s.start_s, end_s: s.end_s, instrument: c.name,
+        model_score: typeof score === 'number' ? score : null,
+        model_above_threshold: typeof score === 'number' && score >= c.threshold,
+        your_label: label,
+      });
+    }
+  });
+  return {
+    about: "The user's own listening judgements. Not ground truth; not sent anywhere by Ohrin; not used to train the model.",
+    scale: [...LABELS], candidates, segments: marked, summary: reviewSummary(review),
+  };
+}
+
+export function buildPassageNote({ fileName, analysis, chordCorrection, arrangementNotes, review, exportedAt }) {
+  const limitations = Array.isArray(analysis.limitations) ? [...analysis.limitations] : [];
+  if (Object.keys(review.labels).length) limitations.push(MARKS_LIMITATION);
+  return {
+    schema: NOTE_SCHEMA, schema_version: NOTE_SCHEMA_VERSION, app: 'Ohrin', exported_at: exportedAt,
+    file_name: fileName, passage: analysis.passage,
+    measured_observations: measuredObservations(analysis.windows),
+    tempo_candidates: analysis.tempo_candidates, harmonic_candidates: analysis.candidate_chords,
+    chord_correction: chordCorrection, arrangement_notes: arrangementNotes,
+    instrument_candidates: analysis.instruments ?? null,
+    listening_review: listeningReview(analysis.instruments, review),
+    limitations,
+  };
+}

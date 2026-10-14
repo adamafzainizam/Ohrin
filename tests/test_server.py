@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from ohrin.server import WEB, analyze_upload
 from tests.test_analysis import write_tone
@@ -12,13 +13,42 @@ class ServerBoundaryTests(unittest.TestCase):
         self.assertIn("Ohrin", page)
         self.assertIn("Select a passage", page)
 
-    def test_upload_analysis_returns_measured_level_change(self):
+    def _analyze(self, instruments):
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / "tone.wav"
             write_tone(path)
-            result = analyze_upload(path.read_bytes(), 0, 4)
+            with mock.patch("ohrin.server.predict_or_unavailable", return_value=instruments):
+                return analyze_upload(path.read_bytes(), 0, 4)
+
+    def test_upload_analysis_returns_measured_level_change(self):
+        result = self._analyze({"available": False, "reason": "x"})
         self.assertEqual(result["passage"], {"start_s": 0.0, "end_s": 4.0})
         self.assertGreater(result["windows"][0]["rms_dbfs"] - result["windows"][3]["rms_dbfs"], 15)
+
+    def test_unavailable_instruments_keep_identity_limitation(self):
+        result = self._analyze({"available": False, "reason": "x"})
+        self.assertIs(result["instruments"]["available"], False)
+        self.assertTrue(any(t.startswith("Instrument identity") for t in result["limitations"]))
+
+    def test_available_instruments_swap_limitation(self):
+        stub = {"available": True, "model": "stub", "classes": [], "segments": [], "caveat": "c"}
+        result = self._analyze(stub)
+        self.assertFalse(any(t.startswith("Instrument identity") for t in result["limitations"]))
+        self.assertTrue(any("uncertain model outputs" in t for t in result["limitations"]))
+
+    def test_prediction_runtime_error_still_yields_analysis_result(self):
+        import contextlib, io
+        import ohrin.instrument_inference as inference
+        model = mock.Mock()
+        model.predict.side_effect = RuntimeError("tensor exploded")
+        with mock.patch.object(inference, "get_model", return_value=(model, None)), \
+                contextlib.redirect_stderr(io.StringIO()):
+            with tempfile.TemporaryDirectory() as d:
+                path = Path(d) / "tone.wav"
+                write_tone(path)
+                result = analyze_upload(path.read_bytes(), 0, 4)
+        self.assertIs(result["instruments"]["available"], False)
+        self.assertIn("windows", result)
 
     def test_rejects_bad_selection_and_bad_audio(self):
         with self.assertRaises(ValueError):

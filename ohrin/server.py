@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
 from .analysis import analyze_audio
+from .instrument_inference import predict_or_unavailable
 
 
 WEB = Path(__file__).resolve().parent.parent / "web"
@@ -24,7 +25,13 @@ def analyze_upload(data: bytes, start: float, end: float) -> dict:
     with tempfile.NamedTemporaryFile(prefix="ohrin-", suffix=".audio", delete=True) as tmp:
         tmp.write(data)
         tmp.flush()
-        return analyze_audio(Path(tmp.name), start, end)
+        result = analyze_audio(Path(tmp.name), start, end)
+        passage = result["passage"]
+        result["instruments"] = predict_or_unavailable(Path(tmp.name), passage["start_s"], passage["end_s"])
+        if result["instruments"]["available"]:
+            result["limitations"] = [t for t in result["limitations"] if not t.startswith("Instrument identity")]
+            result["limitations"].append("Instrument candidates are uncertain model outputs, not confirmed parts.")
+        return result
 
 
 class Handler(BaseHTTPRequestHandler):

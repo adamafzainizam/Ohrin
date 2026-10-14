@@ -56,19 +56,33 @@
         </div>
       </section>
 
+      <p id="liveStatus" class="visually-hidden" role="status" aria-live="polite"></p>
       <section class="results" id="results" hidden>
         <div class="section-head"><div><p class="kicker">02 / NOTICE</p><h2>What changes?</h2></div><span class="tag">Measured from the mix</span></div>
-        <div class="energy-card"><div class="card-top"><strong>Energy &amp; texture</strong><span>One-second windows · RMS level</span></div><canvas id="energyChart" height="190" aria-label="Measured audio level over the passage"></canvas><p id="energyCaption" class="subtle"></p></div>
+        <div class="energy-card"><div class="card-top"><strong>Energy &amp; texture</strong><span>One-second windows · RMS level</span></div><canvas id="energyChart" height="190" aria-label="Measured audio level over the passage"></canvas><p id="energyCaption" class="subtle"></p>
+          <div id="instrumentTimeline" class="timeline" hidden>
+            <div class="card-top"><strong>Instrument scores over time</strong><span class="tag">Model output · uncertain</span></div>
+            <div id="timelineRows" class="timeline-rows"></div>
+            <div id="blockStrip" class="block-strip" role="group" aria-label="Blocks. Arrow keys move between blocks; Enter selects one to mark."></div>
+            <table id="timelineTable" class="visually-hidden"><caption>Instrument model scores per segment (uncertain model output)</caption><thead></thead><tbody></tbody></table>
+            <p id="timelineCaption" class="subtle"></p>
+            <div id="segmentReview" class="segment-review" role="region" aria-label="Block review" hidden></div>
+          </div>
+        </div>
         <div class="result-grid">
           <article class="panel"><span class="panel-number">01</span><h3>Measured changes</h3><ul id="observations"></ul><p class="subtle">Level, onset change, and frequency balance come from the mixed signal. They do not identify instruments.</p></article>
           <article class="panel"><span class="panel-number">02</span><h3>Pulse candidates</h3><div id="tempoCandidates" class="candidate-list"></div><p class="subtle">Autocorrelation can lock onto half-time or subdivisions. Tap and listen before trusting a beat grid.</p></article>
+        </div>
+        <div class="result-grid">
+          <article class="panel"><span class="panel-number">MODEL OUTPUT</span><h3>Instrument candidates</h3><div id="instrumentCandidates" class="candidate-list"></div><p id="instrumentCaveat" class="subtle"></p>
+            <div id="reviewWrap" hidden><p id="reviewTally" class="review-tally"></p><p class="subtle">Your marks are your own listening judgement. They stay in this tab, are not sent anywhere, and are not used to train or score the model. Reloading clears them. Export the note to keep them.</p></div></article>
         </div>
         <div class="section-head next-head"><div><p class="kicker">03 / TRY</p><h2>Turn hearing into action</h2></div><span class="tag tag-amber">Ideas, not detections</span></div>
         <div class="result-grid">
           <article class="panel"><span class="panel-number">FOR GUITARISTS</span><h3>Harmonic sketches</h3><p class="subtle">Experimental pitch-class matches from a full mix. Fret shapes are playable standard-tuning suggestions, not a transcription.</p><div id="chordCandidates" class="chord-list"></div><label class="note-label">My chord correction <input id="chordCorrection" type="text" placeholder="What do you hear instead?"></label></article>
           <article class="panel"><span class="panel-number">FOR PRODUCERS</span><h3>Arrange the contrast</h3><p id="creativeIdea" class="idea"></p><label class="note-label">My arrangement notes <textarea id="arrangementNotes" rows="4" placeholder="Which layer changes here? What would you try?"></textarea></label></article>
         </div>
-        <div class="export-row"><p>Keep the passage, findings, and your corrections together. Audio is excluded.</p><button id="exportButton" class="secondary-button" type="button">Export private note ↓</button></div>
+        <div class="export-row"><p>Keep the passage, findings, your corrections and listening marks together. Audio is excluded.</p><button id="exportButton" class="secondary-button" type="button">Export private note ↓</button></div>
       </section>
       <footer><span>Ohrin / listen, test, correct</span><span>Analysis stays on localhost. Uploaded audio is discarded after each request.</span></footer>
     </main>
