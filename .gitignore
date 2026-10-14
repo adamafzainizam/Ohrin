@@ -20,3 +20,4 @@ AGENTS.md
 docs/handoff.md
 docs/session-log-*.md
 docs/superpowers/
+.playwright-cli/
