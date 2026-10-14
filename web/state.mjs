@@ -80,3 +80,107 @@ export function instrumentTimeline(instruments, passage) {
   const shortCount = segments.filter(s => s.end_s - s.start_s < SEGMENT_NOMINAL_S - EDGE_TOLERANCE_S).length;
   return { resolution_s: SEGMENT_NOMINAL_S, rows, uncovered, shortCount };
 }
+
+export const LABELS = Object.freeze(['heard', 'not_heard', 'unsure']);
+const TARGET_PATTERN = /^(class:[a-z]+|seg:\d+:[a-z]+)$/;
+
+export function emptyReview(key = null) { return { key, labels: {} }; }
+
+export function reviewKey(fileMeta, passage) {
+  if (!fileMeta || !passage) return null;
+  const { name, size, lastModified } = fileMeta;
+  const { start_s, end_s } = passage;
+  const parts = [name, size, lastModified, start_s, end_s];
+  if (parts.some(p => p === undefined || p === null || p === '')) return null;
+  return parts.join('|');
+}
+
+export function candidateTarget(name) { return `class:${name}`; }
+export function segmentTarget(index, name) { return `seg:${index}:${name}`; }
+
+export function setLabel(review, target, label) {
+  if (typeof target !== 'string' || !TARGET_PATTERN.test(target)) throw new TypeError(`Invalid review target: ${target}`);
+  const labels = { ...review.labels };
+  if (label === null) delete labels[target];
+  else if (LABELS.includes(label)) labels[target] = label;
+  else throw new TypeError(`Invalid review label: ${label}`);
+  return { key: review.key, labels };
+}
+
+export function toggleLabel(review, target, label) {
+  return setLabel(review, target, review.labels[target] === label ? null : label);
+}
+
+export function reconcileReview(review, key) {
+  return key !== null && review.key === key ? review : emptyReview(key);
+}
+
+export function pruneReview(review, instruments) {
+  const names = new Set(instruments?.available && Array.isArray(instruments.classes) ? instruments.classes.map(c => c.name) : []);
+  const count = instruments?.available && Array.isArray(instruments.segments) ? instruments.segments.length : 0;
+  const labels = {};
+  for (const [target, label] of Object.entries(review.labels)) {
+    const [kind, a, b] = target.split(':');
+    if (kind === 'class' ? names.has(a) : (names.has(b) && Number(a) < count)) labels[target] = label;
+  }
+  return { key: review.key, labels };
+}
+
+export function reviewSummary(review) {
+  const out = { heard: 0, not_heard: 0, unsure: 0, total: 0 };
+  for (const label of Object.values(review.labels)) { out[label] += 1; out.total += 1; }
+  return out;
+}
+
+export function isStaleResponse(requested, current) {
+  return requested.file !== current.file
+    || requested.selection.start !== current.selection.start
+    || requested.selection.end !== current.selection.end;
+}
+
+export const NOTE_SCHEMA = 'ohrin.passage-note';
+export const NOTE_SCHEMA_VERSION = 2;
+const MARKS_LIMITATION = 'Listening marks are user judgements, not validation of the model.';
+
+function listeningReview(instruments, review) {
+  if (!instruments?.available) return null;
+  const classes = instruments.classes || [];
+  const segments = instruments.segments || [];
+  const candidates = classes.map(c => ({
+    instrument: c.name, model_score: c.probability, model_threshold: c.threshold,
+    model_above_threshold: c.above_threshold, your_label: review.labels[candidateTarget(c.name)] ?? null,
+  }));
+  const marked = [];
+  segments.forEach((s, index) => {
+    for (const c of classes) {
+      const label = review.labels[segmentTarget(index, c.name)];
+      if (!label) continue;
+      const score = s.probabilities?.[c.name];
+      marked.push({
+        index, start_s: s.start_s, end_s: s.end_s, instrument: c.name,
+        model_score: typeof score === 'number' ? score : null,
+        model_above_threshold: typeof score === 'number' && score >= c.threshold,
+        your_label: label,
+      });
+    }
+  });
+  return {
+    about: "The user's own listening judgements. Not ground truth; not sent anywhere by Ohrin; not used to train the model.",
+    scale: [...LABELS], candidates, segments: marked, summary: reviewSummary(review),
+  };
+}
+
+export function buildPassageNote({ fileName, analysis, chordCorrection, arrangementNotes, review, exportedAt }) {
+  const limitations = Array.isArray(analysis.limitations) ? [...analysis.limitations] : [];
+  if (Object.keys(review.labels).length) limitations.push(MARKS_LIMITATION);
+  return {
+    schema: NOTE_SCHEMA, schema_version: NOTE_SCHEMA_VERSION, app: 'Ohrin', exported_at: exportedAt,
+    file_name: fileName, passage: analysis.passage,
+    measured_observations: measuredObservations(analysis.windows),
+    tempo_candidates: analysis.tempo_candidates, harmonic_candidates: analysis.candidate_chords,
+    chord_correction: chordCorrection, arrangement_notes: arrangementNotes,
+    instrument_candidates: analysis.instruments ?? null,
+    listening_review: listeningReview(analysis.instruments, review),
+    limitations,
+  };
+}

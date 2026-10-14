@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import {
   clampSelection, shouldLoop, shouldStop, measuredObservations,
   timeToFraction, instrumentTimeline, SEGMENT_NOMINAL_S,
+  LABELS, emptyReview, reviewKey, candidateTarget, segmentTarget, setLabel, toggleLabel,
+  reconcileReview, pruneReview, reviewSummary, isStaleResponse,
+  NOTE_SCHEMA, NOTE_SCHEMA_VERSION, buildPassageNote,
 } from '../web/state.mjs';
 
 test('selection stays within the decoded duration and keeps order', () => {
@@ -97,4 +100,134 @@ test('instrumentTimeline tolerates missing class probability', () => {
     segments: [{ start_s: 0, end_s: 9.6, probabilities: {} }] }, { start_s: 0, end_s: 9.6 });
   assert.equal(t.rows[0].cells[0].probability, null);
   assert.equal(t.rows[0].cells[0].above, false);
+});
+
+const INSTRUMENTS = {
+  available: true, model: 'fake', caveat: 'c',
+  classes: [
+    { name: 'guitar', probability: 0.71, threshold: 0.40, above_threshold: true },
+    { name: 'bass', probability: 0.2, threshold: 0.3, above_threshold: false },
+  ],
+  segments: [
+    { start_s: 10, end_s: 19.6, probabilities: { guitar: 0.8, bass: 0.58 } },
+    { start_s: 19.6, end_s: 29.2, probabilities: { guitar: 0.7, bass: 0.1 } },
+  ],
+};
+const ANALYSIS = {
+  passage: { start_s: 10, end_s: 29.2 },
+  windows: [{ start_s: 10, end_s: 11, rms_dbfs: -10, band_fraction: [0.5, 0.3, 0.2] },
+            { start_s: 11, end_s: 12, rms_dbfs: -20, band_fraction: [0.5, 0.3, 0.2] }],
+  tempo_candidates: [{ bpm: 100, periodicity: 0.5 }],
+  candidate_chords: [{ name: 'Em' }],
+  instruments: INSTRUMENTS,
+  limitations: ['Instrument candidates are uncertain model outputs, not confirmed parts.'],
+};
+const NOTE_KEYS = ['schema', 'schema_version', 'app', 'exported_at', 'file_name', 'passage', 'measured_observations',
+  'tempo_candidates', 'harmonic_candidates', 'chord_correction', 'arrangement_notes', 'instrument_candidates',
+  'listening_review', 'limitations'].sort();
+
+test('setLabel sets, replaces and clears without mutating input', () => {
+  const r0 = emptyReview('k');
+  const r1 = setLabel(r0, candidateTarget('guitar'), 'heard');
+  assert.deepEqual(r0.labels, {});
+  assert.equal(r1.labels['class:guitar'], 'heard');
+  const r2 = setLabel(r1, 'class:guitar', 'unsure');
+  assert.equal(r1.labels['class:guitar'], 'heard');
+  assert.equal(r2.labels['class:guitar'], 'unsure');
+  const r3 = setLabel(r2, 'class:guitar', null);
+  assert.deepEqual(r3.labels, {});
+  assert.equal(r3.key, 'k');
+  assert.deepEqual([...LABELS], ['heard', 'not_heard', 'unsure']);
+});
+
+test('setLabel rejects unknown labels and malformed targets', () => {
+  const r = emptyReview('k');
+  assert.throws(() => setLabel(r, 'class:guitar', 'yes'), TypeError);
+  assert.throws(() => setLabel(r, 'class:', 'heard'), TypeError);
+  assert.throws(() => setLabel(r, 'seg:x:guitar', 'heard'), TypeError);
+  assert.throws(() => setLabel(r, 'class:Guitar<script>', 'heard'), TypeError);
+  assert.equal(segmentTarget(2, 'bass'), 'seg:2:bass');
+});
+
+test('toggleLabel clears when the same label is chosen again', () => {
+  const r1 = toggleLabel(emptyReview('k'), 'class:bass', 'unsure');
+  assert.equal(r1.labels['class:bass'], 'unsure');
+  const r2 = toggleLabel(r1, 'class:bass', 'unsure');
+  assert.deepEqual(r2.labels, {});
+  assert.equal(toggleLabel(r1, 'class:bass', 'heard').labels['class:bass'], 'heard');
+});
+
+test('reviewKey is null when file metadata or passage is missing', () => {
+  const f = { name: 'a.wav', size: 10, lastModified: 5 };
+  assert.equal(reviewKey(f, { start_s: 1, end_s: 2 }), 'a.wav|10|5|1|2');
+  assert.equal(reviewKey(null, { start_s: 1, end_s: 2 }), null);
+  assert.equal(reviewKey({ name: 'a.wav', size: 10 }, { start_s: 1, end_s: 2 }), null);
+  assert.equal(reviewKey(f, null), null);
+  assert.equal(reviewKey(f, { start_s: 1 }), null);
+});
+
+test('reconcileReview keeps labels only for the identical file and passage', () => {
+  const r = setLabel(emptyReview('a'), 'class:guitar', 'heard');
+  assert.equal(reconcileReview(r, 'a'), r);
+  assert.deepEqual(reconcileReview(r, 'b'), { key: 'b', labels: {} });
+  assert.deepEqual(reconcileReview(r, null), { key: null, labels: {} });
+});
+
+test('pruneReview drops labels for classes or segments not in the new output', () => {
+  let r = emptyReview('k');
+  for (const [t, l] of [['class:guitar', 'heard'], ['class:voice', 'heard'], ['seg:1:bass', 'unsure'], ['seg:5:bass', 'unsure'], ['seg:0:voice', 'heard']]) r = setLabel(r, t, l);
+  const pruned = pruneReview(r, INSTRUMENTS);
+  assert.deepEqual(Object.keys(pruned.labels).sort(), ['class:guitar', 'seg:1:bass']);
+  assert.deepEqual(pruneReview(r, { available: false }).labels, {});
+});
+
+test('reviewSummary counts by label', () => {
+  let r = emptyReview('k');
+  r = setLabel(r, 'class:guitar', 'heard'); r = setLabel(r, 'class:bass', 'unsure'); r = setLabel(r, 'seg:0:bass', 'unsure');
+  assert.deepEqual(reviewSummary(r), { heard: 1, not_heard: 0, unsure: 2, total: 3 });
+});
+
+test('isStaleResponse detects file or selection change during analysis', () => {
+  const f = {};
+  const req = { file: f, selection: { start: 1, end: 5 } };
+  assert.equal(isStaleResponse(req, { file: f, selection: { start: 1, end: 5 } }), false);
+  assert.equal(isStaleResponse(req, { file: {}, selection: { start: 1, end: 5 } }), true);
+  assert.equal(isStaleResponse(req, { file: f, selection: { start: 1, end: 5.1 } }), true);
+  assert.equal(isStaleResponse(req, { file: null, selection: { start: 1, end: 5 } }), true);
+});
+
+test('buildPassageNote v2 includes schema version and listening review', () => {
+  let r = emptyReview('k');
+  r = setLabel(r, 'class:guitar', 'heard'); r = setLabel(r, 'seg:0:bass', 'unsure');
+  const note = buildPassageNote({ fileName: 'x.wav', analysis: ANALYSIS, chordCorrection: 'Em7', arrangementNotes: 'n', review: r, exportedAt: '2026-10-14T00:00:00.000Z' });
+  assert.equal(note.schema, NOTE_SCHEMA);
+  assert.equal(note.schema, 'ohrin.passage-note');
+  assert.equal(note.schema_version, 2);
+  assert.equal(NOTE_SCHEMA_VERSION, 2);
+  assert.equal(note.exported_at, '2026-10-14T00:00:00.000Z');
+  const lr = note.listening_review;
+  assert.deepEqual(lr.candidates.map(c => c.instrument), ['guitar', 'bass']);
+  assert.equal(lr.candidates[0].your_label, 'heard');
+  assert.equal(lr.candidates[0].model_above_threshold, true);
+  assert.equal(lr.candidates[1].your_label, null);
+  assert.equal(lr.segments.length, 1);
+  assert.deepEqual(lr.segments[0], { index: 0, start_s: 10, end_s: 19.6, instrument: 'bass', model_score: 0.58, model_above_threshold: true, your_label: 'unsure' });
+  assert.deepEqual(lr.summary, { heard: 1, not_heard: 0, unsure: 1, total: 2 });
+  assert.ok(note.limitations.includes('Listening marks are user judgements, not validation of the model.'));
+});
+
+test('buildPassageNote never includes audio or raw windows', () => {
+  const note = buildPassageNote({ fileName: 'x.wav', analysis: { ...ANALYSIS, audio: 'x', blob: 'blob:1', data: 'data:audio/wav' },
+    chordCorrection: '', arrangementNotes: '', review: emptyReview('k'), exportedAt: 't' });
+  assert.deepEqual(Object.keys(note).sort(), NOTE_KEYS);
+  const text = JSON.stringify(note);
+  for (const bad of ['windows', 'rms_dbfs', 'data:audio', 'blob:']) assert.equal(text.includes(bad), false, bad);
+  assert.equal(note.limitations.includes('Listening marks are user judgements, not validation of the model.'), false);
+});
+
+test('buildPassageNote with unavailable instruments sets listening_review null', () => {
+  const note = buildPassageNote({ fileName: 'x.wav', analysis: { ...ANALYSIS, instruments: { available: false, reason: 'r' } },
+    chordCorrection: '', arrangementNotes: '', review: emptyReview('k'), exportedAt: 't' });
+  assert.equal(note.listening_review, null);
+  assert.deepEqual(note.instrument_candidates, { available: false, reason: 'r' });
 });

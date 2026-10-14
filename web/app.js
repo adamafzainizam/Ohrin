@@ -1,4 +1,6 @@
-import { clampSelection, shouldLoop, shouldStop, formatTime, measuredObservations, timeToFraction, instrumentTimeline } from './state.mjs';
+import { clampSelection, shouldLoop, shouldStop, formatTime, measuredObservations, timeToFraction, instrumentTimeline,
+  emptyReview, reviewKey, candidateTarget, segmentTarget, setLabel, reconcileReview, pruneReview, reviewSummary,
+  isStaleResponse, buildPassageNote } from './state.mjs';
 
 const $ = id => document.getElementById(id);
 const fileInput = $('audioFile');
@@ -11,10 +13,14 @@ let waveform = null;
 let selection = { start: 0, end: 0 };
 let dragStart = null;
 let analysis = null;
+let review = emptyReview();
+let selectedSegment = null;
 
 function setText(id, value) { $(id).textContent = value; }
 function clearPassageFindings() {
   analysis = null;
+  review = emptyReview();
+  selectedSegment = null;
   $('results').hidden = true;
   $('chordCorrection').value = '';
   $('arrangementNotes').value = '';
@@ -163,6 +169,75 @@ function drawEnergy() {
   ctx.fillText(formatTime(analysis.passage.end_s), w - 39, h - 4);
 }
 
+const MARK_GLYPH = { heard: '✓', not_heard: '✕', unsure: '?' };
+const MARK_TEXT = { heard: 'I hear it', not_heard: "I don't hear it", unsure: 'Unsure' };
+const CHOICES = [['heard', 'I hear it'], ['not_heard', "I don't hear it"], ['unsure', 'Unsure']];
+
+function reviewFieldset(target, group, legend) {
+  const set = document.createElement('fieldset'); set.className = 'review-fields';
+  const lg = document.createElement('legend'); lg.className = 'visually-hidden'; lg.textContent = legend; set.append(lg);
+  for (const [value, text] of CHOICES) {
+    const label = document.createElement('label');
+    const input = document.createElement('input'); input.type = 'radio'; input.name = group; input.value = value;
+    input.checked = review.labels[target] === value;
+    input.dataset.focusId = `${group}-${value}`;
+    input.addEventListener('change', () => { review = setLabel(review, target, value); renderReview(); });
+    label.append(input, ' ', text); set.append(label);
+  }
+  const clear = document.createElement('button'); clear.type = 'button'; clear.className = 'review-clear'; clear.textContent = 'Clear';
+  clear.dataset.focusId = `${group}-clear`;
+  clear.setAttribute('aria-label', `Clear mark: ${legend}`);
+  clear.addEventListener('click', () => { review = setLabel(review, target, null); renderReview(); });
+  set.append(clear);
+  return set;
+}
+
+function renderReview() {
+  const focusId = document.activeElement?.dataset?.focusId;
+  const info = analysis?.instruments;
+  const available = Boolean(info && info.available);
+  $('reviewWrap').hidden = !available;
+  const inst = $('instrumentCandidates');
+  if (available) {
+    inst.replaceChildren();
+    for (const c of info.classes) {
+      addCandidate(inst, c.name, `score ${c.probability} · ${c.above_threshold ? 'above' : 'below'} tuned threshold ${c.threshold} · uncertain`);
+      inst.lastElementChild.append(reviewFieldset(candidateTarget(c.name), `review-class-${c.name}`, `Do you hear ${c.name} in this passage?`));
+    }
+    const sum = reviewSummary(review);
+    const marked = info.classes.filter(c => review.labels[candidateTarget(c.name)]);
+    const counts = { heard: 0, not_heard: 0, unsure: 0 };
+    for (const c of marked) counts[review.labels[candidateTarget(c.name)]] += 1;
+    const detail = [counts.heard && `${counts.heard} heard`, counts.not_heard && `${counts.not_heard} not heard`, counts.unsure && `${counts.unsure} unsure`].filter(Boolean).join(', ');
+    setText('reviewTally', `You marked ${marked.length} of ${info.classes.length} candidates${detail ? ` (${detail})` : ''}.${sum.total > marked.length ? ` ${sum.total - marked.length} block mark${sum.total - marked.length === 1 ? '' : 's'} set.` : ''}`);
+  }
+  drawTimeline();
+  const box = $('segmentReview');
+  box.replaceChildren();
+  const seg = available && selectedSegment !== null ? info.segments[selectedSegment] : null;
+  box.hidden = !available || !$('instrumentTimeline') || $('instrumentTimeline').hidden;
+  if (!box.hidden) {
+    if (!seg) {
+      const p = document.createElement('p'); p.className = 'subtle'; p.textContent = 'Select a block in the timeline to mark what you hear in it.'; box.append(p);
+    } else {
+      const h = document.createElement('h4');
+      h.textContent = `Segment ${formatTime(seg.start_s)}–${formatTime(seg.end_s)} (≈${(seg.end_s - seg.start_s).toFixed(1)} s block)`;
+      const play = document.createElement('button'); play.type = 'button'; play.className = 'secondary-button'; play.textContent = 'Play this block';
+      play.dataset.focusId = 'seg-play';
+      play.addEventListener('click', () => { player.currentTime = seg.start_s; player.play(); });
+      box.append(h, play);
+      for (const c of info.classes) {
+        const wrap = document.createElement('div'); wrap.className = 'segment-class';
+        const p = seg.probabilities?.[c.name];
+        const strong = document.createElement('strong'); strong.textContent = `${c.name} · model score ${typeof p === 'number' ? p.toFixed(2) : 'n/a'}`;
+        wrap.append(strong, reviewFieldset(segmentTarget(selectedSegment, c.name), `review-seg-${selectedSegment}-${c.name}`, `Do you hear ${c.name} in this block?`));
+        box.append(wrap);
+      }
+    }
+  }
+  if (focusId) document.querySelector(`[data-focus-id="${CSS.escape(focusId)}"]`)?.focus();
+}
+
 function fmtScore(p) { return p === null ? 'n/a' : p.toFixed(2); }
 
 function drawTimeline() {
@@ -177,22 +252,28 @@ function drawTimeline() {
   if (!tl) return;
   const pct = f => `${(f * 100).toFixed(3)}%`;
   for (const row of tl.rows) {
-    const label = document.createElement('div'); label.className = 'timeline-label';
+    const label = document.createElement('div'); label.className = 'timeline-label'; label.setAttribute('aria-hidden', 'true');
     label.textContent = `${row.name} · threshold ${row.threshold}`;
     const track = document.createElement('div'); track.className = 'timeline-track';
     for (const u of tl.uncovered) {
-      const gap = document.createElement('div'); gap.className = 'tl-uncovered';
+      const gap = document.createElement('div'); gap.className = 'tl-uncovered'; gap.setAttribute('aria-hidden', 'true');
       const l = timeToFraction(u.start_s, analysis.passage);
       gap.style.left = pct(l); gap.style.width = pct(timeToFraction(u.end_s, analysis.passage) - l);
       gap.textContent = 'not scored'; gap.title = `${formatTime(u.start_s)}–${formatTime(u.end_s)} not scored`;
       track.append(gap);
     }
     for (const c of row.cells) {
-      const cell = document.createElement('div');
-      cell.className = `tl-cell ${c.above ? 'above' : 'below'}${c.short ? ' short' : ''}`;
+      const mark = review.labels[segmentTarget(c.index, row.name)];
+      const cell = document.createElement('button'); cell.type = 'button';
+      cell.className = `tl-cell ${c.above ? 'above' : 'below'}${c.short ? ' short' : ''}${selectedSegment === c.index ? ' selected' : ''}`;
+      cell.dataset.focusId = `seg-${c.index}-${row.name}`;
+      cell.setAttribute('aria-pressed', String(selectedSegment === c.index));
+      cell.addEventListener('click', () => { selectedSegment = c.index; renderReview(); });
       cell.style.left = pct(c.left); cell.style.width = pct(c.width);
-      cell.title = `${row.name} ${formatTime(c.start_s)}–${formatTime(c.end_s)} · score ${fmtScore(c.probability)} · ${c.above ? 'above' : 'below'} threshold ${row.threshold} · model output`;
-      const fill = document.createElement('div'); fill.className = 'tl-fill';
+      cell.title = `${row.name} ${formatTime(c.start_s)}–${formatTime(c.end_s)} · score ${fmtScore(c.probability)} · ${c.above ? 'above' : 'below'} threshold ${row.threshold} · model output${mark ? ` · your mark: ${MARK_TEXT[mark]}` : ''}`;
+      cell.setAttribute('aria-label', `${cell.title}. Select this block to mark what you hear.`);
+      if (mark) { const g = document.createElement('span'); g.className = 'tl-glyph'; g.setAttribute('aria-hidden', 'true'); g.textContent = MARK_GLYPH[mark]; cell.append(g); }
+      const fill = document.createElement('div'); fill.className = 'tl-fill'; fill.setAttribute('aria-hidden', 'true');
       fill.style.height = pct(c.probability === null ? 0 : Math.max(0, Math.min(1, c.probability)));
       cell.append(fill); track.append(cell);
     }
@@ -232,6 +313,7 @@ function addCandidate(container, title, detail) {
 function showAnalysis() {
   $('results').hidden = false;
   $('timelineRows').replaceChildren(); $('timelineTable').tBodies[0].replaceChildren();
+  $('segmentReview').replaceChildren(); selectedSegment = null;
   const remarks = measuredObservations(analysis.windows);
   const list = $('observations'); list.replaceChildren();
   for (const remark of remarks.length ? remarks : ['No one-second level drop over 3 dB was found in this selection.']) {
@@ -246,7 +328,6 @@ function showAnalysis() {
   const inst = $('instrumentCandidates'); inst.replaceChildren();
   const info = analysis.instruments;
   if (info && info.available) {
-    for (const c of info.classes) addCandidate(inst, c.name, `score ${c.probability} · ${c.above_threshold ? 'above' : 'below'} tuned threshold ${c.threshold} · uncertain`);
     setText('instrumentCaveat', `${info.caveat} Segments: ${info.segments.length}.`);
   } else {
     inst.textContent = 'Instrument model unavailable.';
@@ -255,35 +336,35 @@ function showAnalysis() {
   const strongest = remarks[0] || 'Compare the first and last part of the selection.';
   setText('creativeIdea', `Try rebuilding the passage with the same overall level contrast. ${strongest} Change the timing or the layer that carries it to make the idea your own.`);
   setText('energyCaption', 'RMS dBFS from the mixed recording. Higher on the chart means louder; this is not an instrument stem.');
-  drawEnergy(); drawTimeline(); $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  drawEnergy(); renderReview(); $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 $('analyzeButton').addEventListener('click', async () => {
   if (!file || selection.end - selection.start < 1) { setText('selectionLabel', 'Select at least one second.'); return; }
   const button = $('analyzeButton'); button.disabled = true; button.textContent = 'Analysing…';
+  const requested = { file, selection: { start: selection.start, end: selection.end } };
   try {
     const url = `/api/analyze?start=${encodeURIComponent(selection.start)}&end=${encodeURIComponent(selection.end)}`;
     const response = await fetch(url, { method: 'POST', body: file, headers: { 'Content-Type': file.type || 'application/octet-stream' } });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Analysis failed.');
-    analysis = result; showAnalysis();
+    if (isStaleResponse(requested, { file, selection })) return;
+    analysis = result;
+    review = pruneReview(reconcileReview(review, reviewKey(file, result.passage)), result.instruments);
+    showAnalysis();
   } catch (error) { setText('selectionLabel', error.message); }
   finally { button.disabled = false; button.innerHTML = 'Analyse passage <span>↗</span>'; }
 });
 
 $('exportButton').addEventListener('click', () => {
   if (!analysis) return;
-  const note = {
-    app: 'Ohrin', file_name: file.name, passage: analysis.passage,
-    measured_observations: measuredObservations(analysis.windows),
-    tempo_candidates: analysis.tempo_candidates, harmonic_candidates: analysis.candidate_chords,
-    chord_correction: $('chordCorrection').value, arrangement_notes: $('arrangementNotes').value,
-    instrument_candidates: analysis.instruments,
-    limitations: analysis.limitations,
-  };
+  const note = buildPassageNote({
+    fileName: file.name, analysis, chordCorrection: $('chordCorrection').value,
+    arrangementNotes: $('arrangementNotes').value, review, exportedAt: new Date().toISOString(),
+  });
   const url = URL.createObjectURL(new Blob([JSON.stringify(note, null, 2)], { type: 'application/json' }));
   const link = document.createElement('a'); link.href = url; link.download = 'ohrin-passage-note.json'; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
-window.addEventListener('resize', () => { drawWaveform(); if (analysis) { drawEnergy(); drawTimeline(); } });
+window.addEventListener('resize', () => { drawWaveform(); if (analysis) { drawEnergy(); renderReview(); } });
 drawWaveform();
