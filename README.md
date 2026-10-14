@@ -2,38 +2,40 @@
 
 [![CI](https://github.com/adamafzainizam/Ohrin/actions/workflows/ci.yml/badge.svg)](https://github.com/adamafzainizam/Ohrin/actions/workflows/ci.yml)
 
-Derived from the German word “Ohren”, meaning “ears”.
+Ohrin takes its name from the German "Ohren", meaning "ears".
 
-Status: local prototype. The browser workflow, signal analysis, note export (schema v2), a four-class OpenMIC instrument-candidate model, a per-block instrument timeline and an in-session listening review are implemented. The model has real held-out results on OpenMIC clips; its behaviour on full commercial mixes is not validated, and the app presents its scores as uncertain model output.
+It is a local, open-source Python/ML tool with a browser UI for guitarists learning by ear and producers studying how a track is arranged. You pick a passage, loop and slow it, see what changes in level and texture, and get cautious candidates for pulse, chords and instruments that you can correct and export as a private note.
 
-An open-source Python/ML project with a browser UI for guitarists learning by ear and producers studying reference tracks. Help users understand a passage, recreate a playable interpretation, and develop original ideas inspired by its musical character.
+Status: local prototype. The workbench, signal analysis, note export (schema v2), a four-class instrument model trained on OpenMIC, a per-block instrument timeline and an in-session listening review all work. The model has held-out results on OpenMIC clips only. Its behaviour on full commercial mixes has not been measured, so the app shows its scores as uncertain model output.
+
+Ohrin is meant to be installed and run on your own machine, not hosted. A packaged desktop app is planned but not built yet.
 
 ## Start here
 
-Read [the vision and first-version baseline](docs/concept.md). The broader ambition includes musical structure, instruments and performance, genre, mood, occasion suitability, and practical help recreating or reimagining music; the first milestone is a bounded passage-analysis workflow for guitarists and producers.
+[docs/concept.md](docs/concept.md) holds the longer vision and the first-version baseline. [docs/model-card.md](docs/model-card.md) records the model, its evaluation and its limits.
 
-## Next step
+## Next steps
 
-Check how the instrument heads transfer to full mixes on permitted audio, and decide whether a larger or better-suited model is needed. [The model card](docs/model-card.md) records the held-out OpenMIC evaluation and its limits. The Deftones reference recording itself is private and not distributed. The linked [case study](docs/reference-case-study.md) contains only local signal measurements and limitations; no model scores on it are published.
-
-<!-- Screenshot: docs/img/workbench.png (to add; use synthetic or permitted audio only, never the private reference) -->
+- Check how the instrument heads transfer to full mixes, using audio you are allowed to label and share.
+- Package the app so it can be installed without a Python setup.
+- Improve pulse and chord candidates, which are the weakest measured parts.
 
 ## Workspace
 
-- `audio/reference/`: local reference recordings supplied by Adam.
-- `docs/concept.md`: broader vision, first-version baseline, and unresolved decisions.
-- `docs/first-version-scope.md`: evidence from the supplied file and a provisional product/ML scope.
-- `docs/reference-case-study.md`: measured findings and limitations for the selected passage.
-- `experiments/reference_probe.py`: reproducible local signal probe; generated JSON stays in `outputs/`.
-- `experiments/`: exploratory analysis and model training scripts.
-- `outputs/`: generated analysis and visualisations.
+- `ohrin/`: analysis, VGGish extraction, instrument inference and the local server.
+- `web/`: the browser UI (static HTML, CSS and JavaScript).
+- `scripts/`: download helpers for model weights and the OpenMIC data.
+- `experiments/`: model training and evaluation scripts.
+- `docs/`: concept, first-version scope and model card.
+- `tests/`: Python and Node tests that use synthetic signals.
+- `audio/`, `data/`, `outputs/`: local only and ignored by Git.
 
-Audio and generated outputs are excluded from Git by default. Supplying a reference track for local analysis does not make it a public demo asset or an authorised training dataset.
+Audio and generated outputs stay out of Git by default. A recording you analyse locally is not a demo asset or a training dataset.
 
 ## Requirements
 
 - Core workbench: Python 3.12, FFmpeg and NumPy (`requirements.txt`), plus a modern browser.
-- Instrument candidates additionally need PyTorch (`requirements-ml.txt`), the fetched VGGish weights and a trained head in `outputs/`. Without any of these the app still runs and shows an "instrument model unavailable" state with the reason.
+- Instrument candidates also need PyTorch (`requirements-ml.txt`), the fetched VGGish weights and a trained head in `outputs/`. Without any of these the app still runs and shows an "instrument model unavailable" state with the reason.
 
 ## Run locally
 
@@ -42,7 +44,7 @@ python3 -m pip install -r requirements.txt
 python3 -m ohrin.server --port 8765
 ```
 
-Open `http://127.0.0.1:8765`. Choose an audio file under 50 MB, select a passage of up to three minutes by dragging the waveform or entering times, then loop, slow, and analyse it. Uploaded bytes go to a temporary file for FFmpeg and are deleted after analysis. The browser plays a local object URL. Notes export as JSON without audio. Listening marks are kept in memory for the open tab and included only in the exported note.
+Open `http://127.0.0.1:8765`. Choose an audio file under 50 MB, select a passage of up to three minutes by dragging the waveform or entering times, then loop, slow and analyse it. Uploaded bytes go to a temporary file for FFmpeg and are deleted after analysis. The browser plays a local object URL. Notes export as JSON without audio. Listening marks stay in memory for the open tab and appear only in the exported note.
 
 ## Tests
 
@@ -51,11 +53,11 @@ python3 -m unittest discover -s tests -p 'test_*.py' -v
 node tests/app.test.mjs
 ```
 
-Tests use synthetic signals and need no weights, datasets or audio. PyTorch-dependent tests are skipped when PyTorch is not installed. The workflow in `.github/workflows/ci.yml` runs both suites with and without PyTorch; it has not necessarily been run yet, so check the badge or the Actions tab rather than assuming it is green.
+Tests use synthetic signals and need no weights, datasets or audio. PyTorch-dependent tests are skipped when PyTorch is not installed. The workflow in `.github/workflows/ci.yml` runs both suites with and without PyTorch on pull requests.
 
 ## Fetch weights and reproduce the model
 
-VGGish weights are downloaded from their upstream sources and are not redistributed here: the PyTorch port release from [`harritaylor/torchvggish`](https://github.com/harritaylor/torchvggish) and Google's AudioSet `vggish_pca_params.npz` (see the original [VGGish](https://github.com/tensorflow/models/tree/master/research/audioset/vggish) page in `tensorflow/models`). Check each upstream licence yourself before reuse; this repository does not restate or vouch for their terms. Downloads are size-limited and verified against recorded SHA-256 values.
+VGGish weights come from their upstream sources and are not redistributed here: the PyTorch port release from [`harritaylor/torchvggish`](https://github.com/harritaylor/torchvggish) and Google's AudioSet `vggish_pca_params.npz` (see the original [VGGish](https://github.com/tensorflow/models/tree/master/research/audioset/vggish) page in `tensorflow/models`). Check each upstream licence yourself before reuse; this repository does not restate their terms. Downloads are size-limited and checked against recorded SHA-256 values.
 
 ```bash
 python3 scripts/fetch_vggish.py            # -> data/vggish/
@@ -66,13 +68,13 @@ python3 -m experiments.train_openmic --data-root data/openmic-2018   # writes ou
 python3 -m ohrin.server
 ```
 
-`fetch_openmic.py` without `--yes` only prints the download size (unless the archive is already cached at `data/openmic-2018-v1.0.0.tgz`, in which case it extracts it). Use `--archive PATH` for an already-downloaded `openmic-2018-v1.0.0.tgz` (MD5 `e4ccf187e2bb5ab2e115416e8aafe7f4`). OpenMIC-2018 is distributed under its own licence and attribution terms; the archive listing contains a `license-cc-by.txt` member (read it yourself; this repository does not restate its terms). Upstream source: [OpenMIC-2018 on Zenodo](https://zenodo.org/record/1432913).
+Without `--yes`, `fetch_openmic.py` only prints the download size, unless the archive is already cached at `data/openmic-2018-v1.0.0.tgz`, in which case it extracts it. Use `--archive PATH` for an already downloaded `openmic-2018-v1.0.0.tgz` (MD5 `e4ccf187e2bb5ab2e115416e8aafe7f4`). OpenMIC-2018 has its own licence and attribution terms; the archive listing contains a `license-cc-by.txt` member, which you should read yourself. Upstream source: [OpenMIC-2018 on Zenodo](https://zenodo.org/record/1432913).
 
-On the 2026-10-12 run the held-out macro average precision was about 0.915 (linear) and 0.919 (MLP), against 0.550 for a class prior. Small differences across torch versions or CPUs are possible; re-running the whole sequence on a clean machine has not been measured. Results and checkpoints are written to ignored `outputs/`.
+In the first full run the held-out macro average precision was about 0.915 for the linear head and 0.919 for the MLP, against 0.550 for a class prior. Small differences across torch versions or CPUs are possible, and a rerun on a clean machine has not been measured. Results and checkpoints go to the ignored `outputs/` folder.
 
-Optional: `experiments/validate_vggish.py` compares extracted embeddings with OpenMIC's stored features and needs a few OGG files from the archive (`audio/<prefix>/<key>.ogg`) placed manually in `data/openmic-2018/audio_subset/`.
+Optional: `experiments/validate_vggish.py` compares extracted embeddings with OpenMIC's stored features. It needs a few OGG files from the archive (`audio/<prefix>/<key>.ogg`) placed by hand in `data/openmic-2018/audio_subset/`.
 
-The sandbox used during development blocks localhost sockets; the server was run outside it and the UI exercised in Chrome and a headless browser with synthetic WAV files and, locally, the private reference MP3. That is manual checking, not an automated test.
+The browser UI has been checked by hand in Chrome and a headless browser using synthetic WAV files and OpenMIC clips. That is manual checking, not an automated test.
 
 ## License
 
