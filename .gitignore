@@ -1,0 +1,22 @@
+# Local recordings and derived media
+audio/**
+outputs/**
+data/**
+
+# Python and local configuration
+__pycache__/
+*.py[cod]
+.venv/
+.env
+.env.*
+!.env.example
+.ipynb_checkpoints/
+.DS_Store
+
+# Local agent/session files (kept on disk, not published)
+AGENTS.md
+.agents/
+.codex/
+docs/handoff.md
+docs/session-log-*.md
+docs/superpowers/

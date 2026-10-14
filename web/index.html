@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111719">
+  <title>Ohrin — Hear the structure</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Ohrin home"><span class="brand-mark">◖◗</span> Ohrin<span class="brand-dot">.</span></a>
+      <span class="eyebrow">A passage workbench for curious ears</span>
+      <span class="private-pill">● Local session</span>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div>
+          <p class="kicker">LISTEN CLOSER / PLAY IT YOUR WAY</p>
+          <h1>Hear the <em>structure</em><br>inside a passage.</h1>
+          <p class="intro">Loop a moment, slow it down, and inspect measured changes alongside playable ideas. Every estimate stays open to your ears.</p>
+        </div>
+        <label class="upload" id="dropZone">
+          <input type="file" id="audioFile" accept="audio/*,.mp3,.wav,.flac,.ogg,.m4a">
+          <span class="upload-icon">↥</span>
+          <strong>Choose an audio file</strong>
+          <small>or drop one here · stays on this machine</small>
+        </label>
+      </section>
+
+      <section class="workbench" id="workbench" aria-label="Passage workbench">
+        <div class="section-head">
+          <div><p class="kicker">01 / LISTEN</p><h2>Select a passage</h2></div>
+          <p id="fileName" class="filename">No track loaded</p>
+        </div>
+        <div class="wave-wrap">
+          <canvas id="waveform" height="180" aria-label="Audio waveform. Drag to select a passage."></canvas>
+          <div class="wave-caption"><span>Drag across the waveform to select</span><span id="durationLabel">00:00</span></div>
+        </div>
+        <audio id="player" preload="metadata"></audio>
+        <div class="transport">
+          <button id="playButton" class="play-button" type="button" disabled aria-label="Play or pause">▶</button>
+          <span id="timeLabel" class="time">00:00</span>
+          <div class="transport-spacer"></div>
+          <label class="compact-control">Start <input id="startTime" type="number" min="0" step="0.1" value="0" disabled> s</label>
+          <label class="compact-control">End <input id="endTime" type="number" min="0" step="0.1" value="0" disabled> s</label>
+          <label class="compact-control">Speed <select id="speed" disabled><option value="1">1×</option><option value="0.75">0.75×</option><option value="0.5">0.5×</option><option value="0.25">0.25×</option></select></label>
+          <label class="check-control"><input id="loop" type="checkbox" checked disabled> Loop</label>
+        </div>
+        <div class="action-row">
+          <p id="selectionLabel">Load audio to begin.</p>
+          <button id="analyzeButton" class="primary-button" type="button" disabled>Analyse passage <span>↗</span></button>
+        </div>
+      </section>
+
+      <section class="results" id="results" hidden>
+        <div class="section-head"><div><p class="kicker">02 / NOTICE</p><h2>What changes?</h2></div><span class="tag">Measured from the mix</span></div>
+        <div class="energy-card"><div class="card-top"><strong>Energy &amp; texture</strong><span>One-second windows · RMS level</span></div><canvas id="energyChart" height="190" aria-label="Measured audio level over the passage"></canvas><p id="energyCaption" class="subtle"></p></div>
+        <div class="result-grid">
+          <article class="panel"><span class="panel-number">01</span><h3>Measured changes</h3><ul id="observations"></ul><p class="subtle">Level, onset change, and frequency balance come from the mixed signal. They do not identify instruments.</p></article>
+          <article class="panel"><span class="panel-number">02</span><h3>Pulse candidates</h3><div id="tempoCandidates" class="candidate-list"></div><p class="subtle">Autocorrelation can lock onto half-time or subdivisions. Tap and listen before trusting a beat grid.</p></article>
+        </div>
+        <div class="section-head next-head"><div><p class="kicker">03 / TRY</p><h2>Turn hearing into action</h2></div><span class="tag tag-amber">Ideas, not detections</span></div>
+        <div class="result-grid">
+          <article class="panel"><span class="panel-number">FOR GUITARISTS</span><h3>Harmonic sketches</h3><p class="subtle">Experimental pitch-class matches from a full mix. Fret shapes are playable standard-tuning suggestions, not a transcription.</p><div id="chordCandidates" class="chord-list"></div><label class="note-label">My chord correction <input id="chordCorrection" type="text" placeholder="What do you hear instead?"></label></article>
+          <article class="panel"><span class="panel-number">FOR PRODUCERS</span><h3>Arrange the contrast</h3><p id="creativeIdea" class="idea"></p><label class="note-label">My arrangement notes <textarea id="arrangementNotes" rows="4" placeholder="Which layer changes here? What would you try?"></textarea></label></article>
+        </div>
+        <div class="export-row"><p>Keep the passage, findings, and your corrections together. Audio is excluded.</p><button id="exportButton" class="secondary-button" type="button">Export private note ↓</button></div>
+      </section>
+      <footer><span>Ohrin / listen, test, correct</span><span>Analysis stays on localhost. Uploaded audio is discarded after each request.</span></footer>
+    </main>
+  </div>
+</body>
+</html>
