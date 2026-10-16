@@ -142,10 +142,13 @@ def make_model(kind: str):
     raise ValueError(f"Unknown model type: {kind}")
 
 
-def fit_classifier(kind, train_x, train_y, train_mask, val_x, val_y, val_mask, *, epochs=80, seed=42):
-    """Train a small supervised head on frozen embeddings, selecting by val loss."""
+def fit_classifier(kind, train_x, train_y, train_mask, val_x, val_y, val_mask, *, epochs=80, seed=42, factory=None):
+    """Train a small supervised head on frozen embeddings, selecting by val loss.
+
+    `factory` (optional, called after seeding) builds the model instead of make_model(kind).
+    """
     torch.manual_seed(seed)
-    model = make_model(kind)
+    model = make_model(kind) if factory is None else factory()
     optimizer = torch.optim.AdamW(model.parameters(), lr=.008 if kind == "linear" else .003, weight_decay=.01)
     tx = torch.as_tensor(train_x, dtype=torch.float32)
     ty = torch.as_tensor(train_y, dtype=torch.float32)
@@ -175,6 +178,8 @@ def fit_classifier(kind, train_x, train_y, train_mask, val_x, val_y, val_mask, *
             stale += 1
             if stale >= 12:
                 break
+    if best_weights is None:
+        raise ValueError("Validation loss never became finite.")
     model.load_state_dict(best_weights)
     model.eval()
     return model, history
