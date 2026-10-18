@@ -13,8 +13,11 @@ samples. They are not listening and do not verify what a sound is. name_label co
 keywords and is a weak hint only. verified_label is never filled by this script.
 
 Measurement caveats: only the first MAX_ANALYSIS_S seconds are analysed for onsets and centroid
-(duration_s is the full length). Onset detection can miss hits shorter than about 60 ms and
-merges onsets closer than 50 ms. The centroid is a whole-file FFT, so decay tails and DC offset
+(duration_s is the full length) and at most MAX_ANALYSIS_SAMPLES mono samples, so a file above
+about 280 kHz is analysed for less than 30 s. Analysis holds roughly five float64/complex copies
+of that prefix at once (about 0.3 GB at the cap). Onset detection misses hits shorter than about
+1024 samples (the frame length: about 23 ms at 44.1 kHz, 128 ms at 8 kHz; the rise
+must also beat mean + 2 std of the flux) and merges onsets closer than 50 ms. The centroid is a whole-file FFT, so decay tails and DC offset
 drag it. Channels are averaged to mono, which cancels phase-inverted stereo content.
 
 Hygiene: manifest.csv holds untrusted names from the archive and cell values are NOT rewritten.
@@ -57,7 +60,8 @@ KIT_SPLITS = ('train', 'val', 'test')
 MAX_FILE_BYTES = 64 * 1024 * 1024        # per-file listing_size cap (exclude too_large)
 MAX_TOTAL_BYTES = 4 * 1024 ** 3          # total of included listing sizes allowed in one extract
 MAX_DECODE_BYTES = 256 * 1024 * 1024     # declared data bytes allowed before any read
-MAX_DECODE_SAMPLES = 16 * 1024 * 1024    # declared samples (all channels); bounds the decoded float64 set to ~128 MB
+MAX_DECODE_SAMPLES = 16 * 1024 * 1024    # declared samples (all channels); bounds what a file may declare, not memory
+MAX_ANALYSIS_SAMPLES = 8 * 1024 * 1024   # mono samples analysed per file; bounds analysis memory to ~0.3 GB (see header)
 MAX_CHANNELS = 8
 MAX_RATE = 768000
 MAX_ANALYSIS_S = 30.0
@@ -660,7 +664,7 @@ def verify_extracted(outdir, row):
 
 _PCM_GUID_TAIL = b'\x00\x00\x00\x00\x10\x00\x80\x00\x00\xaa\x00\x38\x9b\x71'
 _MAX_FMT_BYTES = 1024
-_MAX_CHUNKS = 256
+_MAX_CHUNKS = 8192  # valid files carry LIST/cue/smpl runs; each chunk costs one seek, so this stays bounded
 _READ_CHUNK_BYTES = 1 << 20
 
 
@@ -783,8 +787,11 @@ def _to_float(raw, kind, width):
 def decode_wav_prefix(path, max_seconds=MAX_ANALYSIS_S, flags=None):
     """Decode PCM (8/16/24/32-bit) and IEEE float (32/64-bit) WAV, plain or WAVE_FORMAT_EXTENSIBLE.
 
-    Returns (mono float64 array of at most max_seconds, rate, sha256, total_frames); max_seconds
-    None decodes everything. The file is read in 1 MiB chunks: the hash is updated with every
+    Returns (mono float64 array of at most max_seconds and MAX_ANALYSIS_SAMPLES, rate, sha256,
+    total_frames). The sample cap applies only when max_seconds is set; max_seconds=None decodes
+    everything, bounded only by MAX_DECODE_SAMPLES (declared samples), so its footprint can reach
+    about 128 MB of float64 for the mono mix. A file with no complete frame raises
+    WavProblem 'empty_wav_data'. The file is read in 1 MiB chunks: the hash is updated with every
     declared data byte (including a trailing partial frame, so files that differ only there are
     not duplicates) while only the analysed prefix is converted, so the decoded footprint is
     bounded by MAX_DECODE_SAMPLES and the prefix. Float payloads are checked for NaN/Inf over the
@@ -799,7 +806,9 @@ def decode_wav_prefix(path, max_seconds=MAX_ANALYSIS_S, flags=None):
             flags.extend(hdr_flags)
         frame = ch * width
         total = size // frame
-        want = total if max_seconds is None else min(total, int(max_seconds * rate))
+        if total == 0:  # no complete frame: no samples to measure, and such files could share a hash, so exclude them
+            raise WavProblem('empty_wav_data')
+        want = total if max_seconds is None else min(total, int(max_seconds * rate), MAX_ANALYSIS_SAMPLES)
         out = np.empty(want, dtype=np.float64)
         prefix = f'{ch}:{width}:{rate}:' if kind == 'pcm' else f'f:{ch}:{width}:{rate}:'
         h = hashlib.sha256(prefix.encode())
@@ -813,8 +822,9 @@ def decode_wav_prefix(path, max_seconds=MAX_ANALYSIS_S, flags=None):
             left -= len(raw)
             h.update(raw)
             whole = raw[:len(raw) // frame * frame]
-            if kind == 'float' and whole:
-                if not np.isfinite(np.frombuffer(whole, dtype='<f4' if width == 4 else '<f8')).all():
+            scalars = raw[:len(raw) // width * width]  # includes complete scalars of a trailing partial frame
+            if kind == 'float' and scalars:
+                if not np.isfinite(np.frombuffer(scalars, dtype='<f4' if width == 4 else '<f8')).all():
                     raise WavProblem('nonfinite_samples')
             if done < want and whole:
                 n = min(len(whole) // frame, want - done)

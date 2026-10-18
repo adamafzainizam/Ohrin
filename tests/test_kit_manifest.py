@@ -1048,6 +1048,45 @@ class FloatWavTests(unittest.TestCase):
         self.assertEqual(len(self.decode(odd)[0]), 7)
         self.assertEqual(len(self.decode(raw_wav(tag=1, bits=8, data=b'\x80' * 7, pad=b'\0'))[0]), 7)
 
+    def test_nonfinite_trailing_scalar_of_a_partial_frame_is_rejected(self):
+        stereo = np.array([0.5, -0.5, 0.25, 0.25], dtype='<f4').tobytes()
+        for bad in (np.nan, np.inf):
+            tail = np.array([bad], dtype='<f4').tobytes()  # one complete scalar, half a stereo frame
+            self.assertEqual(self.reason(raw_wav(tag=3, ch=2, bits=32, data=stereo + tail)), 'nonfinite_samples')
+        ok = np.array([0.1], dtype='<f4').tobytes()
+        self.assertEqual(len(self.decode(raw_wav(tag=3, ch=2, bits=32, data=stereo + ok))[0]), 2)
+
+    def test_empty_data_wavs_are_unreadable_and_never_deduplicated(self):
+        self.assertEqual(self.reason(raw_wav(tag=1, bits=16, data=b'')), 'empty_wav_data')
+        self.assertEqual(self.reason(raw_wav(tag=1, bits=16, data=b'\x01')), 'empty_wav_data')  # less than one frame
+        with tempfile.TemporaryDirectory() as tmp:
+            rows = []
+            for i in range(2):
+                (Path(tmp) / f'{i}.wav').write_bytes(raw_wav(tag=1, bits=16, data=b''))
+                row = {f: '' for f in km.FIELDS}
+                row.update(file_id=str(i), archive_path=f'{i}.wav', include=True)
+                rows.append(row)
+            km.measure_rows(tmp, rows)
+            self.assertEqual([(r['include'], r['reason'], r['duplicate_of']) for r in rows],
+                             [(False, 'empty_wav_data', '')] * 2)
+
+    def test_files_with_many_valid_chunks_are_accepted(self):
+        d = tone_f32(20).tobytes()
+        fmt = struct.pack('<HHIIHH', 3, 1, 8000, 32000, 4, 32)
+        chunks = b''.join(b'cue ' + struct.pack('<I', 0) for _ in range(1000))
+        body = b'WAVE' + b'fmt ' + struct.pack('<I', 16) + fmt + chunks + b'data' + struct.pack('<I', len(d)) + d
+        self.assertEqual(len(self.decode(b'RIFF' + struct.pack('<I', len(body)) + body)[0]), 20)
+
+    def test_analysis_prefix_is_capped_in_samples(self):
+        data = tone_f32(500).tobytes()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'a.wav'
+            path.write_bytes(raw_wav(tag=3, bits=32, rate=1000, data=data))
+            with mock.patch.object(km, 'MAX_ANALYSIS_SAMPLES', 100):
+                x, _, digest, total = km.decode_wav_prefix(path)
+        self.assertEqual((len(x), total), (100, 500))
+        self.assertEqual(digest, hashlib.sha256(b'f:1:4:1000:' + data).hexdigest())  # the hash still covers all data
+
     def test_chunk_walk_is_bounded(self):
         fmt = struct.pack('<HHIIHH', 3, 1, 8000, 32000, 4, 32)
         chunks = b''.join(b'junk' + struct.pack('<I', 0) for _ in range(km._MAX_CHUNKS + 5))
