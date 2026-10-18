@@ -50,6 +50,8 @@
           <label class="compact-control">Speed <select id="speed" disabled><option value="1">1×</option><option value="0.75">0.75×</option><option value="0.5">0.5×</option><option value="0.25">0.25×</option></select></label>
           <label class="check-control"><input id="loop" type="checkbox" checked disabled> Loop</label>
         </div>
+        <button id="eqDisclosure" type="button" aria-expanded="false" aria-controls="eqPanel" disabled>Listening EQ</button>
+        <section id="eqPanel" class="eq-panel" aria-label="Listening EQ" hidden></section>
         <div class="action-row">
           <p id="selectionLabel">Load audio to begin.</p>
           <button id="analyzeButton" class="primary-button" type="button" disabled>Analyse passage <span>↗</span></button>
@@ -64,7 +66,7 @@
             <div class="card-top"><strong>Instrument scores over time</strong><span class="tag">Model output · uncertain</span></div>
             <div id="timelineRows" class="timeline-rows"></div>
             <div id="blockStrip" class="block-strip" role="group" aria-label="Blocks. Arrow keys move between blocks; Enter selects one to mark."></div>
-            <table id="timelineTable" class="visually-hidden"><caption>Instrument model scores per segment (uncertain model output)</caption><thead></thead><tbody></tbody></table>
+            <div class="visually-hidden"><table id="timelineTable"><caption>Instrument model scores per segment (uncertain model output)</caption><thead></thead><tbody></tbody></table></div>
             <p id="timelineCaption" class="subtle"></p>
             <div id="segmentReview" class="segment-review" role="region" aria-label="Block review" hidden></div>
           </div>

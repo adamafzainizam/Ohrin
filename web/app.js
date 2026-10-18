@@ -1,3 +1,4 @@
+import { initEq } from './eq-ui.js';
 import { clampSelection, shouldLoop, shouldStop, formatTime, measuredObservations, timeToFraction, instrumentTimeline,
   emptyReview, reviewKey, candidateTarget, segmentTarget, setLabel, reconcileReview, pruneReview, reviewSummary,
   settleRequest, dragExceeded, isPrimaryPress, primaryButtonHeld, resolveDrag, uncoveredCaption, reviewTallyText, buildPassageNote } from './state.mjs';
@@ -19,6 +20,16 @@ let rovingSegment = 0;
 let analysis = null;
 let review = emptyReview();
 let selectedSegment = null;
+const eq = initEq({ player, announce, fitCanvas });
+let playGeneration = 0;
+let playPending = false;
+async function startPlayback() {
+  const token = ++playGeneration; playPending = true;
+  try { await eq.resume(); if (token !== playGeneration) return; await player.play(); }
+  catch (error) { if (token === playGeneration) announce(error.message); }
+  finally { if (token === playGeneration) playPending = false; }
+}
+
 
 function setText(id, value) { $(id).textContent = value; }
 function setTextIfChanged(id, value) { if ($(id).textContent !== value) $(id).textContent = value; }
@@ -103,6 +114,7 @@ function refreshSelectionUI() {
 async function loadFile(chosen) {
   if (!chosen) return;
   if (objectUrl) URL.revokeObjectURL(objectUrl);
+  playGeneration++; playPending = false; eq.fileChanged();
   player.pause(); file = chosen; waveform = null;
   requestSeq += 1; // invalidate any in-flight analysis; it no longer owns the button
   resetAnalyzeButton();
@@ -118,7 +130,7 @@ async function loadFile(chosen) {
       player.src = objectUrl;
     });
     if (!Number.isFinite(player.duration) || player.duration < 1) throw new Error('The audio duration could not be read.');
-    for (const id of ['playButton', 'startTime', 'endTime', 'speed', 'loop', 'analyzeButton']) $(id).disabled = false;
+    for (const id of ['playButton', 'startTime', 'endTime', 'speed', 'loop', 'analyzeButton', 'eqDisclosure']) $(id).disabled = false;
     $('startTime').max = player.duration;
     $('endTime').max = player.duration;
     setText('durationLabel', formatTime(player.duration));
@@ -179,8 +191,9 @@ canvas.addEventListener('lostpointercapture', abandonDrag);
 for (const id of ['startTime', 'endTime']) $(id).addEventListener('change', () => updateSelection(Number($('startTime').value), Number($('endTime').value)));
 $('speed').addEventListener('change', () => { player.playbackRate = Number($('speed').value); player.preservesPitch = true; });
 $('playButton').addEventListener('click', () => {
-  if (player.paused) { if (player.currentTime >= selection.end || player.currentTime < selection.start) player.currentTime = selection.start; player.play(); }
-  else player.pause();
+  if (playPending) { playGeneration++; playPending = false; player.pause(); return; }
+  if (player.paused) { if (player.currentTime >= selection.end || player.currentTime < selection.start) player.currentTime = selection.start; startPlayback(); }
+  else { playGeneration++; player.pause(); }
 });
 player.addEventListener('play', () => { $('playButton').textContent = 'Ⅱ'; });
 player.addEventListener('pause', () => { $('playButton').textContent = '▶'; });
@@ -268,7 +281,7 @@ function renderReview() {
       h.textContent = `Segment ${formatTime(seg.start_s)}–${formatTime(seg.end_s)} (≈${(seg.end_s - seg.start_s).toFixed(1)} s block)`;
       const play = document.createElement('button'); play.type = 'button'; play.className = 'secondary-button'; play.textContent = 'Play this block';
       play.dataset.focusId = 'seg-play';
-      play.addEventListener('click', () => { player.currentTime = seg.start_s; player.play(); });
+      play.addEventListener('click', () => { player.currentTime = seg.start_s; startPlayback(); });
       box.append(h, play);
       for (const c of info.classes) {
         const wrap = document.createElement('div'); wrap.className = 'segment-class';
@@ -450,7 +463,7 @@ $('exportButton').addEventListener('click', () => {
   if (!analysis) return;
   const note = buildPassageNote({
     fileName: file.name, analysis, chordCorrection: $('chordCorrection').value,
-    arrangementNotes: $('arrangementNotes').value, review, exportedAt: new Date().toISOString(),
+    arrangementNotes: $('arrangementNotes').value, review, exportedAt: new Date().toISOString(), eq: eq.snapshot(),
   });
   const url = URL.createObjectURL(new Blob([JSON.stringify(note, null, 2)], { type: 'application/json' }));
   const link = document.createElement('a'); link.href = url; link.download = 'ohrin-passage-note.json'; link.click();

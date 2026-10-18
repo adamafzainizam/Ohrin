@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ohrin.server import WEB, analyze_upload
+from ohrin.server import WEB, FILES, Handler, analyze_upload
 from tests.test_analysis import write_tone
 
 
@@ -12,6 +12,24 @@ class ServerBoundaryTests(unittest.TestCase):
         page = (WEB / "index.html").read_text()
         self.assertIn("Ohrin", page)
         self.assertIn("Select a passage", page)
+
+    def test_eq_static_routes(self):
+        import io
+        for path, expected in [("/eq.mjs", 200), ("/eq-ui.js", 200), ("/unknown-eq.js", 404)]:
+            handler = object.__new__(Handler)
+            handler.path = path
+            handler.wfile = io.BytesIO()
+            handler.send_response = mock.Mock()
+            handler.send_header = mock.Mock()
+            handler.end_headers = mock.Mock()
+            handler.send_error = mock.Mock()
+            handler.do_GET()
+            if expected == 200:
+                handler.send_response.assert_called_with(200)
+                handler.send_header.assert_any_call("Content-Type", "text/javascript; charset=utf-8")
+                self.assertTrue(handler.wfile.getvalue())
+            else:
+                handler.send_error.assert_called()
 
     def _analyze(self, instruments):
         with tempfile.TemporaryDirectory() as d:
