@@ -3,6 +3,8 @@ import hashlib
 import importlib.util
 import io
 import json
+import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -16,7 +18,7 @@ if HAS_TORCH:
     import torch
     from experiments import masking_curve as mc
 
-PARITY_OK = {"ok": True, "reasons": []}
+PARITY_OK = {"ok": True, "reasons": [], "gaps": []}
 
 
 def fake_labels():
@@ -151,12 +153,15 @@ class PairTests(unittest.TestCase):
         again, _ = mc.build_pairs(keys, true, mask, test, "drums", n_pairs=300, exclude=extra)
         self.assertFalse({p.masker for p in again} & extra)
 
-    def test_all_pairs_exclude_other_class_targets(self):
+    def test_all_pairs_allow_a_clip_to_serve_both_classes_but_not_its_own(self):
         keys, true, mask, test = fake_labels()
         data = {"keys": keys, "true": true, "mask": mask, "test_indices": test}
         both = mc.all_pairs(data)
+        for cls, other in (("drums", "bass"), ("bass", "drums")):
+            own = mc.target_candidates(keys, true, mask, test, cls)
+            self.assertFalse({p.masker for p in both[cls][0]} & own)
         bass_targets = mc.target_candidates(keys, true, mask, test, "bass")
-        self.assertFalse({p.masker for p in both["drums"][0]} & bass_targets)
+        self.assertTrue({p.masker for p in both["drums"][0]} & bass_targets)  # no cross-class exclusion
 
 
 @unittest.skipUnless(HAS_TORCH, "PyTorch not installed")
@@ -403,7 +408,9 @@ class ScoringTests(unittest.TestCase):
         good = {"pass": True, "n_clips": 200}
         self.assertTrue(mc.parity_gate(good, good)["ok"])
         self.assertIn("audio_subset missing", mc.parity_gate(None, good)["reasons"])
-        self.assertFalse(mc.parity_gate({"pass": False, "n_clips": 8}, good)["ok"])
+        out_of_tol = mc.parity_gate({"pass": False, "n_clips": 8}, {"pass": False, "n_clips": 200})
+        self.assertTrue(out_of_tol["ok"])  # a gap is reported, not a blocker
+        self.assertEqual(len(out_of_tol["gaps"]), 2)
         short = mc.parity_gate(good, {"pass": True, "n_clips": 84})
         self.assertFalse(short["ok"])
         self.assertTrue(any("fewer than 200" in r for r in short["reasons"]))
@@ -435,13 +442,16 @@ def fake_decode(path):
 
 
 def hand_scores(n, real=None, pink=None, clip=None, alone=0.0):
-    """Scores where >= .5 is a detection. real/pink/clip: {ratio: value or array}; default everything detected."""
+    """Scores where >= .5 is a detection. real/pink/clip: {ratio: value or array}.
+
+    The default is 90% detected (every tenth pair, offset 1, missed) so no control sits at the 0.98 ceiling."""
     real, pink, clip = real or {}, pink or {}, clip or {}
+    base = np.where(np.arange(n) % 10 == 1, 0.0, 1.0)
     arr = lambda v: np.full(n, v, dtype=float) if np.isscalar(v) else np.asarray(v, dtype=float)
     return {"unmixed": np.ones(n), "alone_real": np.full(n, alone), "alone_pink": np.zeros(n), "alone_neutral_clip": np.zeros(n),
-            "real": {r: arr(real.get(r, 1.0)) for r in mc.RATIOS},
-            "pink": {r: arr(pink.get(r, 1.0)) for r in mc.RATIOS},
-            "neutral_clip": {r: arr(clip.get(r, 1.0)) for r in mc.RATIOS}}
+            "real": {r: arr(real.get(r, base)) for r in mc.RATIOS},
+            "pink": {r: arr(pink.get(r, base)) for r in mc.RATIOS},
+            "neutral_clip": {r: arr(clip.get(r, base)) for r in mc.RATIOS}}
 
 
 def hand_ids(n=40, n_maskers=10, n_neutrals=10, neutral=True):
@@ -464,7 +474,7 @@ class GateTests(unittest.TestCase):
         self.assertEqual(g["conclusion"], mc.CONCLUSION)
         self.assertFalse(g["provisional"])
         for arm in g["arms"].values():
-            self.assertAlmostEqual(arm["excess_drop"]["value"], 1.0)
+            self.assertAlmostEqual(arm["excess_drop"]["value"], .9)
             self.assertGreater(arm["excess_drop"]["ci95"][0], 0)
         self.assertEqual(g["pooling_note"], mc.POOLING_NOTE)
         self.assertIsNotNone(g["composite_info_only"])
@@ -488,8 +498,8 @@ class GateTests(unittest.TestCase):
             self.assertTrue(c["conclusion"].startswith(("Not shown:", "Not established:")))
 
     def test_margin_below_point_one_stops(self):
-        real = np.ones(40)
-        real[:3] = 0
+        real = np.where(np.arange(40) % 10 == 1, 0.0, 1.0)
+        real[[2, 3, 4]] = 0
         g = self.verdict(hand_scores(40, real={12: real}))
         self.assertEqual(g["verdict"], "stop_no_excess")
         self.assertAlmostEqual(g["arms"]["pink_noise"]["excess_drop"]["value"], .075)
@@ -499,7 +509,7 @@ class GateTests(unittest.TestCase):
         scores["neutral_clip"] = {r: np.full(40, np.nan) for r in mc.RATIOS}
         scores["alone_neutral_clip"] = np.full(40, np.nan)
         g = self.verdict(scores)
-        self.assertEqual(g["verdict"], "continue")
+        self.assertEqual(g["verdict"], "pink_only_excess")
         self.assertTrue(g["provisional"])
         self.assertEqual(g["provisional_reason"], "provisional (pink-noise control only)")
         self.assertEqual(g["arms"]["neutral_clips"]["status"], "unavailable")
@@ -509,19 +519,94 @@ class GateTests(unittest.TestCase):
         self.assertFalse(g["arms"]["neutral_clips"]["available"])
         self.assertTrue(g["provisional"])
 
-    def test_floor_saturated_control_is_flagged_and_excluded(self):
-        g = self.verdict(hand_scores(40, real={12: 0.0}, pink={0: 0.0, 6: 0.0, 12: 0.0, 18: 0.0, -6: 0.0}))
+    def test_only_a_floor_control_is_excluded_a_ceiling_control_still_counts(self):
+        floor = {r: 0.0 for r in mc.RATIOS}
+        g = self.verdict(hand_scores(40, real={12: 0.0}, pink=floor))
         pink = g["arms"]["pink_noise"]
         self.assertEqual((pink["saturation"], pink["flag"], pink["informative"]), ("saturated_low", "control saturated", False))
+        self.assertIsNone(pink["passes"])
         self.assertTrue(g["provisional"])
         self.assertEqual(g["provisional_reason"], "provisional (neutral-clip control only)")
-        ceiling = self.verdict(hand_scores(40, real={12: 0.0}))["arms"]["pink_noise"]
-        self.assertEqual(ceiling["saturation"], "saturated_high")  # flagged, still informative
-        self.assertTrue(ceiling["informative"])
+        ceiling = self.verdict(hand_scores(40, real={12: 0.0}, pink={r: 1.0 for r in mc.RATIOS}))["arms"]["pink_noise"]
+        self.assertEqual((ceiling["saturation"], ceiling["flag"], ceiling["informative"]), ("saturated_high", "control saturated", True))
+        self.assertTrue(ceiling["passes"])  # a ceiling control that does not degrade is valid evidence
+
+    def test_a_failing_ceiling_control_vetoes_instead_of_vanishing(self):
+        pink = {r: 1.0 for r in mc.RATIOS}
+        pink[12] = 0.0  # starts at the ceiling and drops as much as the real arm
+        g = self.verdict(hand_scores(40, real={12: 0.0}, pink=pink))
+        self.assertEqual(g["arms"]["pink_noise"]["saturation"], "saturated_high")
+        self.assertFalse(g["arms"]["pink_noise"]["passes"])
+        self.assertEqual(g["verdict"], "controls_disagree")
+        self.assertNotEqual(g["conclusion"], mc.CONCLUSION)
+
+    def test_ceiling_boundary_is_at_exactly_point_nine_eight(self):
+        real_drop, factors = np.ones(100), [np.arange(100), np.arange(100)]
+        zero = np.zeros(100)
+        at = mc.control_arm("x", real_drop, zero, factors, 0.98, 50)
+        below = mc.control_arm("x", real_drop, zero, factors, 0.979, 50)
+        self.assertEqual((at["saturation"], below["saturation"]), ("saturated_high", "ok"))
+        self.assertTrue(at["informative"] and below["informative"])
+
+    def test_controls_that_miss_different_pairs_still_pass(self):
+        clip = np.where(np.arange(40) % 10 == 3, 0.0, 1.0)  # neutral misses other pairs than pink does
+        g = self.verdict(hand_scores(40, real={12: 0.0, 18: 0.0}, clip={r: clip for r in mc.RATIOS}))
+        self.assertEqual(g["verdict"], "continue")
+
+    def test_one_target_track_or_masker_cannot_pass(self):
+        ids = hand_ids(n_maskers=1)
+        ids["target"] = np.array(["000000_0"] * 40)
+        g = mc.summarise(hand_scores(40, real={12: 0.0}), ids, .5, PARITY_OK, 100)["gate0"]
+        self.assertEqual(g["verdict"], "too_few_sources")
+        self.assertNotEqual(g["verdict"], "continue")
+
+    def test_no_pairs_is_stated_not_called_a_baseline_failure(self):
+        empty = {"target": np.array([]), "masker": np.array([]), "neutral": np.array([])}
+        g = mc.gate0({}, empty, PARITY_OK)
+        self.assertEqual(g["verdict"], "no_pairs")
+
+    def test_parity_gap_with_unmeasured_flips_is_provisional(self):
+        gap = {"ok": True, "reasons": [], "gaps": ["test-clip parity outside tolerance"]}
+        g = mc.summarise(hand_scores(40, real={12: 0.0, 18: 0.0}), hand_ids(), .5, gap, 100, None)["gate0"]
+        self.assertTrue(g["provisional"])
+        self.assertIn("not measured", g["provisional_reason"])
+        clean = mc.summarise(hand_scores(40, real={12: 0.0, 18: 0.0}), hand_ids(), .5, PARITY_OK, 100, None)["gate0"]
+        self.assertFalse(clean["provisional"])
+
+    def test_pink_arm_reports_a_matched_actual_snr_sensitivity_outside_the_verdict(self):
+        g = self.verdict(hand_scores(40, real={12: 0.0, 18: 0.0}))
+        sens = g["arms"]["pink_noise"]["sensitivity_matched_actual_snr_0_to_6"]
+        self.assertEqual(set(sens), {"value", "ci95"})
+        self.assertEqual(g["verdict"], "continue")
+
+    def test_pink_only_conclusion_states_the_offset(self):
+        scores = hand_scores(40, real={12: 0.0})
+        scores["neutral_clip"] = {r: np.full(40, np.nan) for r in mc.RATIOS}
+        scores["alone_neutral_clip"] = np.full(40, np.nan)
+        g = self.verdict(scores)
+        self.assertIn("12 dB below the nominal ratio", g["conclusion"])
+        self.assertIn("12 dB below nominal", g["rule"])
+
+    def test_pink_only_excess_never_states_the_neutral_claim(self):
+        scores = hand_scores(40, real={12: 0.0})
+        scores["neutral_clip"] = {r: np.full(40, np.nan) for r in mc.RATIOS}
+        scores["alone_neutral_clip"] = np.full(40, np.nan)
+        g = self.verdict(scores)
+        self.assertEqual(g["verdict"], "pink_only_excess")
+        self.assertNotIn(mc.CONCLUSION, g["conclusion"])
+        self.assertTrue(g["provisional"])
+
+    def test_decision_flips_above_five_percent_make_the_verdict_provisional(self):
+        scores = hand_scores(40, real={12: 0.0, 18: 0.0})
+        few = mc.summarise(scores, hand_ids(), .5, PARITY_OK, 100, {"flips": 2, "n": 54})["gate0"]
+        many = mc.summarise(scores, hand_ids(), .5, PARITY_OK, 100, {"flips": 3, "n": 54})["gate0"]
+        self.assertFalse(few["provisional"])
+        self.assertTrue(many["provisional"])
+        self.assertIn("3 of 54", many["provisional_reason"])
 
     def test_one_odd_masker_widens_the_crossed_ci(self):
         ids = hand_ids(n_maskers=5, n_neutrals=10)
-        real12 = np.where(ids["masker"] == "m0", 0.0, 1.0)  # one masker of five drives the whole drop
+        real12 = np.where(ids["masker"] == "m0", 0.0, np.where(np.arange(40) % 10 == 1, 0.0, 1.0))  # one masker of five drives the whole drop
         scores = hand_scores(40, real={12: real12})
         g = mc.summarise(scores, ids, .5, PARITY_OK, 400)["gate0"]
         arm = g["arms"]["pink_noise"]
@@ -561,7 +646,7 @@ class GateTests(unittest.TestCase):
         self.assertAlmostEqual(out["masker_alone_rate"]["real"]["value"], .2)
         self.assertEqual(out["masker_alone_rate"]["real"]["n_distinct_clips"], 10)
         self.assertAlmostEqual(out["recall"]["real"][12]["value"], 0.0)
-        self.assertEqual(out["continuous"]["auc_mixed_vs_masker_alone"]["pink"][0], 1.0)
+        self.assertAlmostEqual(out["continuous"]["auc_mixed_vs_masker_alone"]["pink"][0], .95)  # 10% of pink scores tie at 0
         self.assertNotIn("masker_alone_fpr", out)
         json.dumps(mc.to_jsonable(out), allow_nan=False)
 
@@ -647,21 +732,30 @@ class WiringTests(unittest.TestCase):
         gap = block["classes"]["drums"]["unmixed_recall_gap"]
         self.assertEqual(set(gap), {"stored_features", "reextracted_raw", "peak_normalised"})
         self.assertAlmostEqual(gap["stored_features"], gap["reextracted_raw"])
-        self.assertIn(block["classes"]["drums"]["gate0"]["verdict"], {"continue", "stop_no_excess", "controls_disagree", "stop_baseline"})
+        self.assertIn(block["classes"]["drums"]["gate0"]["verdict"], {"continue", "pink_only_excess", "stop_no_excess", "controls_disagree", "stop_baseline", "no_informative_control"})
         self.assertEqual(block["classes"]["bass"]["gate0"]["pooling_note"], mc.POOLING_NOTE)
         written = json.loads((self.root / "out" / "masking_curve.json").read_text())
-        self.assertEqual(written["schema"], 2)
+        self.assertEqual(written["schema"], 3)
         self.assertIn("timestamp_utc", written["strict"]["metadata"])
         self.assertEqual(written["strict"]["metadata"]["constants"]["seed"], mc.SEED)
 
-    def test_stored_feature_mismatch_makes_the_verdict_inconclusive(self):
+    def test_stored_feature_mismatch_is_reported_as_a_gap_not_a_blocker(self):
         bad = dict(self.data, features=np.clip(self.data["features"] + .5, 0, 1).astype(np.float32))
         doc = self.run_mode("strict", data=bad)
-        self.assertFalse(doc["strict"]["parity"]["ok"])
+        parity = doc["strict"]["parity"]
+        self.assertTrue(parity["ok"])
+        self.assertTrue(parity["gaps"])
+        self.assertIn("GAPS", mc.format_summary(doc["strict"]))
+        self.assertIn("target decision flips", mc.format_summary(doc["strict"]))
+        self.assertIn("all_classes_summary", parity["clips"])
         for res in doc["strict"]["classes"].values():
-            self.assertEqual(res["gate0"]["verdict"], "inconclusive_parity")
+            self.assertNotEqual(res["gate0"]["verdict"], "inconclusive_parity")
 
     def test_too_few_clips_for_parity_is_inconclusive(self):
+        for k in mc.parity_clip_keys(self.data, 10 ** 6):
+            path = mc.audio_path(self.root / "audio", k)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(ogg())
         with contextlib.redirect_stdout(io.StringIO()):
             doc = mc.run(self.root, None, self.root / "out", n_boot=10, decode=fake_decode, model=self.model,
                          data=self.data, parity_min_clips=10 ** 6)
@@ -680,12 +774,108 @@ class WiringTests(unittest.TestCase):
         self.assertIn("masker_predicted_target", relaxed["relaxed"]["classes"]["drums"])
         again = self.run_mode("strict")
         self.assertIn("relaxed", again)
+        (out / "masking_curve.json").write_text(json.dumps({"schema": 2, "relaxed": {"old": "rules"}}))
+        self.assertNotIn("relaxed", self.run_mode("strict"))  # blocks from older rules are never mixed in
+        self.run_mode("relaxed")
+        again = self.run_mode("strict")
         self.assertNotIn("stale_key", again)
 
     def test_missing_extracted_clip_is_a_clear_error(self):
         mc.audio_path(self.root / "audio", mc.parity_clip_keys(self.data, 5)[0]).unlink()
         with self.assertRaisesRegex(FileNotFoundError, "extract"):
             self.run_mode("strict")
+
+
+@unittest.skipUnless(HAS_TORCH, "PyTorch not installed")
+class RemainingFixesTests(unittest.TestCase):
+    def test_masker_alone_rate_is_the_mean_over_crop_outcomes_and_order_independent(self):
+        values = np.array([1.0, 0.0, 1.0, 1.0])
+        ids = np.array(["a", "a", "b", "c"])
+        means, names = mc.mean_per_id(values, ids)
+        self.assertEqual(list(names), ["a", "b", "c"])
+        np.testing.assert_allclose(means, [.5, 1.0, 1.0])
+        swapped, _ = mc.mean_per_id(values[[1, 0, 2, 3]], ids)
+        np.testing.assert_allclose(swapped, means)  # exchanging a clip's two crop outcomes changes nothing
+
+    def test_neutral_clip_identity_widens_the_real_arm_ci_because_it_sets_the_crop(self):
+        n = 40
+        ids = hand_ids(n, n_maskers=10, n_neutrals=2)
+        by_neutral = np.where(ids["neutral"] == "n0", 0.0, 1.0)  # outcome fixed by which neutral clip cropped the pair
+        out = mc.summarise(hand_scores(n, real={0: by_neutral, 12: by_neutral}), ids, .5, PARITY_OK, 300)
+        low, high = out["recall"]["real"][0]["ci95"]
+        self.assertGreater(high - low, .8)
+
+    def test_pink_is_mixed_at_the_preregistered_offset_with_several_draws(self):
+        seen = []
+        pairs = [mc.Pair("000100_0", "000200_3", None)]
+        rng = np.random.default_rng(0)
+        clips = {"000100_0": rng.standard_normal(16000 * 2) * .1, "000200_3": rng.standard_normal(16000 * 2) * .1}
+        scores, kept, info = mc.collect_scores(pairs, 2, clips.__getitem__, lambda s: np.array([0, 0, .5, 0]), ratios=(0,))
+        self.assertEqual(scores["pink"][0].shape, (1, mc.NOISE_DRAWS))
+        self.assertEqual(scores["alone_pink"].shape, (1, mc.NOISE_DRAWS))
+        self.assertLess(info["max_band_ratio_error_db"], .1)  # achieved ratio matches ratio + offset
+
+    def test_progress_callback_fires_every_25_pairs(self):
+        pairs = [mc.Pair(f"{100 + i:06d}_0", f"{200 + i:06d}_3", None) for i in range(60)]
+        rng = np.random.default_rng(0)
+        clips = {k: rng.standard_normal(4000) * .1 for k in mc.pair_keys(pairs)}
+        seen = []
+        mc.collect_scores(pairs, 2, clips.__getitem__, lambda s: np.array([0, 0, .5, 0]), ratios=(0,),
+                          progress=lambda done, total: seen.append((done, total)))
+        self.assertEqual(seen, [(25, 60), (50, 60)])
+
+    def test_pink_offset_value_and_summary_collapses_draws(self):
+        self.assertEqual(mc.PINK_OFFSET_DB, -12.0)
+        n = 6
+        scores = hand_scores(n)
+        scores["alone_pink"] = np.zeros((n, mc.NOISE_DRAWS))
+        scores["pink"] = {r: np.ones((n, mc.NOISE_DRAWS)) for r in mc.RATIOS}
+        scores["pink"][12][:, 0] = 0.0  # one of three draws loses the target at +12
+        out = mc.summarise(scores, hand_ids(n, 3, 3), .5, PARITY_OK, 20)
+        self.assertAlmostEqual(out["recall"]["pink"][12]["value"], 2 / 3)
+        self.assertEqual(out["pink_noise_draw_recall"][12], [0.0, 1.0, 1.0])
+        self.assertTrue(out["under_powered_vs_n"])
+        self.assertEqual(out["distinct_masker_tracks"], 3)
+
+    def test_all_conditions_use_the_same_cropped_interval(self):
+        lengths = []
+        pairs = [mc.Pair("000100_0", "000200_3", "000300_1")]
+        rng = np.random.default_rng(1)
+        clips = {"000100_0": rng.standard_normal(16000 * 3) * .1, "000200_3": rng.standard_normal(16000 * 2) * .1,
+                 "000300_1": rng.standard_normal(16000 * 4) * .1}
+
+        def score(samples):
+            lengths.append(len(samples))
+            return np.array([0, 0, .5, 0])
+
+        mc.collect_scores(pairs, 2, clips.__getitem__, score, ratios=(0,))
+        self.assertEqual(set(lengths), {16000 * 2})
+
+    def test_extraction_uses_an_unpredictable_exclusive_temp_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            archive = root / "a.tgz"
+            member = root / "src" / "audio" / "000" / "000100_0.ogg"
+            member.parent.mkdir(parents=True)
+            member.write_bytes(ogg())
+            with tarfile.open(archive, "w:gz") as tar:
+                tar.add(root / "src" / "audio", arcname="audio")
+            digest = mc.file_md5(archive)
+            predictable = root / "out" / "000" / "000100_0.ogg.tmp"
+            predictable.parent.mkdir(parents=True)
+            target = root / "secret.txt"
+            target.write_text("keep")
+            predictable.symlink_to(target)  # the old fixed name would have been written through this link
+            mc.extract_clips(archive, root / "out", {"000100_0"}, expected_md5=digest)
+            self.assertEqual(target.read_text(), "keep")
+            self.assertTrue(mc.audio_path(root / "out", "000100_0").is_file())
+
+
+class LazyTorchTests(unittest.TestCase):
+    def test_import_does_not_load_torch(self):
+        code = "import sys; import experiments.masking_curve; sys.exit(1 if 'torch' in sys.modules else 0)"
+        result = subprocess.run([sys.executable, "-c", code], cwd=Path(__file__).resolve().parents[1])
+        self.assertEqual(result.returncode, 0)
 
 
 if __name__ == "__main__":
