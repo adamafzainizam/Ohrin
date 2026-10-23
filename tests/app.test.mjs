@@ -1,3 +1,4 @@
+import './eq.test.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -125,7 +126,7 @@ const ANALYSIS = {
 };
 const NOTE_KEYS = ['schema', 'schema_version', 'app', 'exported_at', 'file_name', 'passage', 'measured_observations',
   'tempo_candidates', 'harmonic_candidates', 'chord_correction', 'arrangement_notes', 'instrument_candidates',
-  'listening_review', 'limitations'].sort();
+  'listening_review', 'limitations', 'eq'].sort();
 
 test('setLabel sets, replaces and clears without mutating input', () => {
   const r0 = emptyReview('k');
@@ -197,14 +198,14 @@ test('isStaleResponse detects file or selection change during analysis', () => {
   assert.equal(isStaleResponse(req, { file: null, selection: { start: 1, end: 5 } }), true);
 });
 
-test('buildPassageNote v2 includes schema version and listening review', () => {
+test('buildPassageNote v3 includes schema version and listening review', () => {
   let r = emptyReview('k');
   r = setLabel(r, 'class:guitar', 'heard'); r = setLabel(r, 'seg:0:bass', 'unsure');
   const note = buildPassageNote({ fileName: 'x.wav', analysis: ANALYSIS, chordCorrection: 'Em7', arrangementNotes: 'n', review: r, exportedAt: '2026-10-14T00:00:00.000Z' });
   assert.equal(note.schema, NOTE_SCHEMA);
   assert.equal(note.schema, 'ohrin.passage-note');
-  assert.equal(note.schema_version, 2);
-  assert.equal(NOTE_SCHEMA_VERSION, 2);
+  assert.equal(note.schema_version, 3);
+  assert.equal(NOTE_SCHEMA_VERSION, 3);
   assert.equal(note.exported_at, '2026-10-14T00:00:00.000Z');
   const lr = note.listening_review;
   assert.deepEqual(lr.candidates.map(c => c.instrument), ['guitar', 'bass']);
@@ -309,4 +310,14 @@ test('a selection commits only past the pixel threshold and the minimum duration
   assert.equal(resolveDrag({ startX: 100, endX: 101, startS: 5, endS: 9 }), 'click');
   assert.equal(resolveDrag({ startX: 100, endX: 160, startS: 5, endS: 5.1 }), 'click');
   assert.equal(resolveDrag({ startX: 100, endX: 40, startS: 9, endS: 5 }), 'commit');
+});
+
+test('EQ note exports settings only and adds limitation only for nonflat bands', async () => {
+  const {defaultBands}=await import('../web/eq.mjs');
+  const args={fileName:'synthetic.wav',analysis:ANALYSIS,chordCorrection:'',arrangementNotes:'',review:emptyReview(),exportedAt:'test'};
+  const flat=buildPassageNote(args);const bands=defaultBands();bands[1].gain_db=6;
+  const shaped=buildPassageNote({...args,eq:{bands,samples:[1],spectrum:[2],audio:'bad',solo:1}});
+  assert.equal(shaped.limitations.length,flat.limitations.length+1);
+  const walk=o=>{for(const [key,value] of Object.entries(o||{})){assert.ok(!['audio','samples','spectrum','solo'].includes(key));if(value&&typeof value==='object')walk(value);}};
+  walk(shaped);assert.equal(shaped.eq.bands[1].gain_db,6);
 });

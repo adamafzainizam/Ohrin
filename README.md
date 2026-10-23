@@ -6,7 +6,7 @@ Ohrin takes its name from the German "Ohren", meaning "ears".
 
 It is a local, open-source Python/ML tool with a browser UI for guitarists learning by ear and producers studying how a track is arranged. You pick a passage, loop and slow it, see what changes in level and texture, and get cautious candidates for pulse, chords and instruments that you can correct and export as a private note.
 
-Status: local prototype. The workbench, signal analysis, note export (schema v2), a four-class instrument model trained on OpenMIC, a per-block instrument timeline and an in-session listening review all work. The model has held-out results on OpenMIC clips only. Its behaviour on full commercial mixes has not been measured, so the app shows its scores as uncertain model output.
+Status: local prototype. The workbench, signal analysis, note export (schema v3), a seven-band listening EQ, a four-class instrument model trained on OpenMIC, a per-block instrument timeline and an in-session listening review all work. The model has held-out results on OpenMIC clips only. Its behaviour on full commercial mixes has not been measured, so the app shows its scores as uncertain model output.
 
 Ohrin is meant to be installed and run on your own machine, not hosted. A packaged desktop app is planned but not built yet.
 
@@ -44,7 +44,7 @@ python3 -m pip install -r requirements.txt
 python3 -m ohrin.server --port 8765
 ```
 
-Open `http://127.0.0.1:8765`. Choose an audio file under 50 MB, select a passage of up to three minutes by dragging the waveform or entering times, then loop, slow and analyse it. Uploaded bytes go to a temporary file for FFmpeg and are deleted after analysis. The browser plays a local object URL. Notes export as JSON without audio. Listening marks stay in memory for the open tab and appear only in the exported note.
+Open `http://127.0.0.1:8765`. Choose an audio file under 50 MB, select a passage of up to three minutes by dragging the waveform or entering times, then loop, slow and analyse it. Uploaded bytes go to a temporary file for FFmpeg and are deleted after analysis. The browser plays a local object URL. Notes export as JSON without audio. Listening EQ shapes playback only; analysis uses the original audio. Its frequency presets are creative starting points, not instrument isolation. Bypass skips EQ but keeps output soft clipping. EQ settings can be saved in a passage note and loaded locally; no audio is exported. Listening marks stay in memory for the open tab and appear only in the exported note.
 
 ## Tests
 

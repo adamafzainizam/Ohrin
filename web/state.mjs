@@ -1,3 +1,4 @@
+import { eqNoteBlock, isFlat } from './eq.mjs';
 export function clampSelection(a, b, duration) {
   const limit = Math.max(0, Number(duration) || 0);
   const x = Math.max(0, Math.min(limit, Number(a) || 0));
@@ -207,7 +208,7 @@ export function reviewTallyText(classes, review) {
 }
 
 export const NOTE_SCHEMA = 'ohrin.passage-note';
-export const NOTE_SCHEMA_VERSION = 2;
+export const NOTE_SCHEMA_VERSION = 3;
 const MARKS_LIMITATION = 'Listening marks are user judgements, not validation of the model.';
 
 function listeningReview(instruments, review) {
@@ -238,10 +239,13 @@ function listeningReview(instruments, review) {
   };
 }
 
-export function buildPassageNote({ fileName, analysis, chordCorrection, arrangementNotes, review, exportedAt }) {
+export function buildPassageNote({ fileName, analysis, chordCorrection, arrangementNotes, review, exportedAt, eq }) {
   const limitations = Array.isArray(analysis.limitations) ? [...analysis.limitations] : [];
   if (Object.keys(review.labels).length) limitations.push(MARKS_LIMITATION);
+  const eqBlock = eqNoteBlock(eq);
+  if (!isFlat(eqBlock.bands)) limitations.push("EQ settings shape playback only. They are not measurements and do not separate instruments.");
   return {
+    eq: eqBlock,
     schema: NOTE_SCHEMA, schema_version: NOTE_SCHEMA_VERSION, app: 'Ohrin', exported_at: exportedAt,
     file_name: fileName, passage: analysis.passage,
     measured_observations: measuredObservations(analysis.windows),
