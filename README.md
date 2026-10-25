@@ -61,7 +61,7 @@ VGGish weights come from their upstream sources and are not redistributed here: 
 
 ```bash
 python3 scripts/fetch_vggish.py            # -> data/vggish/
-python3 -m pip install 'torch>=2.2' --index-url https://download.pytorch.org/whl/cpu   # CPU index only; a plain install pulls the much larger CUDA build on Linux
+python3 -m pip install 'torch>=2.13.0' --index-url https://download.pytorch.org/whl/cpu   # CPU index only; a plain install pulls the much larger CUDA build on Linux
 python3 -m pip install -r requirements-ml.txt   # remaining requirements from PyPI
 python3 scripts/fetch_openmic.py --yes     # ~2.6 GB; extracts four files to data/openmic-2018/
 python3 -m experiments.train_openmic --data-root data/openmic-2018   # writes outputs/openmic-{linear,mlp}.pt + metrics
