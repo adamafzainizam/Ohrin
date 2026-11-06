@@ -1,2 +1,2 @@
 -r requirements.txt
-torch>=2.2
+torch>=2.13.0
