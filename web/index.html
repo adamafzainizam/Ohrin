@@ -44,10 +44,7 @@
         <p class="subtle">Audio stays on this machine.</p>
         <button id="emptyOpen" class="tool-button" type="button"><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M245,110.64A16,16,0,0,0,232,104H216V88a16,16,0,0,0-16-16H130.67L102.94,51.2a16.14,16.14,0,0,0-9.6-3.2H40A16,16,0,0,0,24,64V208h0a8,8,0,0,0,8,8H211.1a8,8,0,0,0,7.59-5.47l28.49-85.47A16.05,16.05,0,0,0,245,110.64ZM93.34,64,123.2,86.4A8,8,0,0,0,128,88h72v16H69.77a16,16,0,0,0-15.18,10.94L40,158.7V64Zm112,136H43.1l26.67-80H232Z"/></svg><span>Open an audio file</span></button>
       </div>
-      <div id="waveWrap" class="wave-wrap" hidden>
-        <canvas id="waveform" height="180" aria-label="Audio waveform. Drag to select a passage."></canvas>
-        <div class="wave-caption"><span>Drag across the waveform to select</span><span id="durationLabel">00:00</span></div>
-      </div>
+      <div id="overviewWrap" class="lane-row overview-row" hidden><div class="lane-label">Track</div><div id="overview" class="overview lane-plot"><canvas aria-label="Whole track overview"></canvas><div class="overview-view" aria-hidden="true"></div></div></div>
       <audio id="player" preload="metadata"></audio>
       <div id="selectionBar" class="selection-bar">
         <label class="compact-control">Start <input id="startTime" type="number" min="0" step="0.1" value="0" disabled> s</label>
@@ -55,21 +52,28 @@
         <p id="selectionLabel" class="selection-label">No audio loaded.</p>
         <button id="analyzeButton" class="primary-button" type="button" disabled>Analyse passage</button>
       </div>
+      <div id="waveWrap" class="wave-wrap" hidden>
+        <div id="laneStack" class="lane-stack" tabindex="0" aria-label="Time aligned audio lanes">
+          <div class="lane-row ruler-row"><div class="lane-label">Time</div><canvas id="ruler" class="lane-plot" aria-label="Track time ruler"></canvas></div>
+          <div class="lane-row"><div class="lane-label">Waveform</div><canvas id="waveform" class="lane-plot" height="120" aria-label="Audio waveform. Drag to select a passage."></canvas></div>
+          <div class="lane-row"><div class="lane-label">Measured</div><canvas id="energyChart" class="lane-plot" height="64" aria-label="Measured RMS audio level on the track time axis"></canvas></div>
+          <div id="instrumentTimeline" class="instrument-lanes" hidden>
+            <p class="lane-provenance">Model output, uncertain</p><div id="timelineRows"></div>
+          </div>
+          <div class="playhead-axis"><div id="playhead" class="playhead" aria-hidden="true" hidden></div></div>
+        </div>
+        <div class="wave-caption"><span>Drag across the waveform to select</span><span id="durationLabel">00:00</span></div>
+        <p id="energyCaption" class="subtle">RMS dBFS from the mixed recording. Higher means louder; this is not an instrument stem.</p>
+        <div id="blockStrip" class="block-strip" role="group" aria-label="Blocks. Arrow keys move between blocks; Enter selects one to mark."></div>
+        <div class="visually-hidden"><table id="timelineTable"><caption>Instrument model scores per segment (uncertain model output)</caption><thead></thead><tbody></tbody></table></div>
+        <p id="timelineCaption" class="subtle"></p>
+      </div>
     </div>
     <aside id="inspector" class="inspector" aria-label="Inspector">
       <p id="liveStatus" class="visually-hidden" role="status" aria-live="polite"></p>
       <section class="results" id="results" aria-label="Results" hidden>
         <div class="section-head"><h2>Findings</h2><span class="tag">Measured from the mix</span></div>
-        <div class="energy-card"><div class="card-top"><strong>Energy &amp; texture</strong><span>One-second windows · RMS level</span></div><canvas id="energyChart" height="190" aria-label="Measured audio level over the passage"></canvas><p id="energyCaption" class="subtle"></p>
-          <div id="instrumentTimeline" class="timeline" hidden>
-            <div class="card-top"><strong>Instrument scores over time</strong><span class="tag">Model output · uncertain</span></div>
-            <div id="timelineRows" class="timeline-rows"></div>
-            <div id="blockStrip" class="block-strip" role="group" aria-label="Blocks. Arrow keys move between blocks; Enter selects one to mark."></div>
-            <div class="visually-hidden"><table id="timelineTable"><caption>Instrument model scores per segment (uncertain model output)</caption><thead></thead><tbody></tbody></table></div>
-            <p id="timelineCaption" class="subtle"></p>
-            <div id="segmentReview" class="segment-review" role="region" aria-label="Block review" hidden></div>
-          </div>
-        </div>
+        <div id="segmentReview" class="segment-review" role="region" aria-label="Block review" hidden></div>
         <div class="result-grid">
           <article class="panel"><h3>Measured changes</h3><ul id="observations"></ul><p class="subtle">Level, onset change, and frequency balance come from the mixed signal. They do not identify instruments.</p></article>
           <article class="panel"><h3>Pulse candidates</h3><div id="tempoCandidates" class="candidate-list"></div><p class="subtle">Autocorrelation can lock onto half-time or subdivisions. Tap and listen before trusting a beat grid.</p></article>

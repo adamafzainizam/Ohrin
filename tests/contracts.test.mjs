@@ -12,6 +12,7 @@ const read = path => readFileSync(path, 'utf8');
 // Later tasks that add computed IDs append to this list.
 export const COMPUTED_IDS = [
   'playButton', 'startTime', 'endTime', 'speed', 'loop', 'analyzeButton', 'eqDisclosure',
+  'overviewWrap', 'overview', 'laneStack', 'ruler', 'waveform', 'energyChart', 'playhead',
   'eqType', 'eqFrequency', 'eqGain', 'eqQ', 'eqSlope', 'eqEnabled',
 ];
 

@@ -116,7 +116,7 @@ body.dropping .lane-area{outline:2px solid var(--accent);outline-offset:4px;bord
 @media(max-width:480px){
   :root{--topbar-h:96px}
   .topbar{flex-wrap:wrap;gap:8px 10px;padding:8px 12px;align-content:flex-start}
-  .brand{display:none}
+  .brand{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip:rect(0 0 0 0)}
   .tb-play{order:1;gap:8px}
   .more{order:2;margin-left:auto}
   .tb-file{order:3;flex:1 1 100%}
@@ -144,3 +144,36 @@ body.dropping .lane-area{outline:2px solid var(--accent);outline-offset:4px;bord
 .eq-panel > .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 input[type=number]{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+/* Shared time axis: every plot uses the same gutter and content width. */
+.wave-wrap{padding:0;overflow:hidden}
+.lane-stack{position:relative;overflow-x:clip;min-width:0}
+.lane-stack:focus-visible{outline-offset:-2px}
+.lane-row{display:grid;grid-template-columns:minmax(0,1fr);min-width:0}
+.lane-label{padding:4px 8px;font-size:12px;color:var(--text-muted);line-height:14px;min-width:0}
+.lane-plot{min-width:0;width:100%;display:block;overflow:hidden}
+.overview-row{margin-bottom:12px;background:var(--surface-1);border:1px solid var(--line);border-radius:var(--r-panel);overflow:hidden}
+.overview{height:36px;position:relative;touch-action:none}
+.overview canvas{height:36px}
+.overview-view{position:absolute;top:2px;height:32px;border:1px solid var(--line-strong);pointer-events:none}
+#ruler{height:32px}
+#waveform{height:120px}
+#energyChart{height:64px}
+.instrument-track{position:relative;height:28px;background:var(--surface-1)}
+.lane-provenance{font-size:12px;color:var(--text-muted);margin:6px 8px}
+.lane-unanalysed{position:absolute;top:0;bottom:0;background:var(--surface-2);color:var(--text-muted);font-size:12px;line-height:28px;white-space:nowrap;overflow:hidden;padding:0 6px}
+.instrument-track .tl-cell{border-color:var(--line);border-radius:4px;overflow:hidden;outline:0;box-shadow:none}
+.instrument-track .tl-cell.short{border:1px dashed var(--line-strong)}
+.instrument-track .tl-cell .tl-fill{background:repeating-linear-gradient(45deg,var(--hatch) 0 1px,transparent 1px 4px);opacity:1}
+.instrument-track .tl-cell.selected{outline:2px solid var(--accent);outline-offset:-2px}
+.playhead-axis{position:absolute;top:0;bottom:0;left:0;right:0;pointer-events:none;overflow:hidden}
+.playhead{position:absolute;top:0;bottom:0;left:-1px;width:2px;background:var(--playhead);will-change:transform}
+.block-strip{position:static;display:flex;flex-wrap:wrap;gap:4px;height:auto;margin:8px}
+.block-strip .tl-block{position:static;flex:none;width:32px;height:32px;font-size:12px}
+.lane-skeleton{background:var(--surface-2)}
+.wave-caption,#energyCaption,#timelineCaption{margin:8px;font-size:12px}
+@media(min-width:1280px){
+  .lane-row{grid-template-columns:96px minmax(0,1fr)}
+  .playhead-axis{left:96px}
+  .lane-provenance{margin-left:96px}
+}
