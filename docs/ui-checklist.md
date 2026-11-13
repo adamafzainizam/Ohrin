@@ -21,7 +21,7 @@ Honesty rule: record exactly what was done for each row. A row that could not be
 | 1 | Keyboard only: set End then Start, tab to Analyse, press Enter, results appear | S0 | Focus `#endTime` and `#startTime` with the keyboard, type values, Tab out. Focus `#analyzeButton`, press Enter. Wait for `#results` to be visible. |
 | 2 | Keyboard only: Tab reaches the block strip as one stop, arrows and Home move between blocks | S0 | From `#analyzeButton` press Tab until the focused `data-focus-id` starts with `seg-`. Press ArrowRight twice, then Home, and read the focused id each time. |
 | 3 | Keyboard only: Enter on a block selects it and reveals the block review | S0 | With a block focused press Enter. `#segmentReview h4` names that block and its time range. |
-| 4 | Keyboard only: Tab from the strip reaches "Play this block", then the marking radios and Clear buttons | S0 | Press Tab repeatedly from the strip and list the focused ids. |
+| 4 | Keyboard only: Tab from the strip reaches "Play this block", then the marking radios and Clear buttons | S0 | Press Tab from the strip through the active inspector tab and panel to Play, then the marking radios and Clear buttons; list the focused ids. |
 | 5 | Keyboard only: a mark can be set and cleared with Space and Enter | S0 | Focus a radio, press Space, read `checked`. Focus its Clear button, press Enter, read the tally. |
 | 6 | Keyboard only: export | S0 | Focus `#exportButton`, press Enter, capture the download, parse it as JSON. Schema is `ohrin.passage-note` v3. |
 | 7 | Focus stays on the control after marking and after clearing | S0 | Read `document.activeElement` data-focus-id straight after Space on a radio and Enter on Clear. It must be unchanged. |
@@ -31,23 +31,23 @@ Honesty rule: record exactly what was done for each row. A row that could not be
 | 11 | EQ import announces success once | S0 | Observer on `#liveStatus` during the import. |
 | 12 | Abandoned drag restores the selection and keeps the results | S0 | Press on the waveform, move past the threshold, dispatch `pointercancel`. Selection label returns to the earlier value and `#results` stays visible. |
 | 13 | A move with no button held abandons the drag | S0 | Press, move, dispatch a `pointermove` with `buttons: 0`. Same expectation as row 12. |
-| 14 | A committed drag changes the selection and clears the results | S0 | Press, move, release. Selection label changes and `#results` is hidden. |
-| 15 | A stale analysis response is ignored when the selection changes in flight | S0 | Route `/api/analyze` with a 2.5 s delay. Press Analyse, change End before the response arrives, wait. Results stay hidden and the button is re-enabled. |
-| 16 | A stale analysis response is ignored when another file loads in flight | S0 | Same delayed route. Press Analyse, load a second file (a copy with another name), wait. Results stay hidden, new file name shown, button enabled. |
+| 14 | A committed drag changes the selection and retains findings as stale | S7 | Press, move, release. Selection changes, findings remain, and `#staleBanner` shows. Earlier slices cleared findings before S7. |
+| 15 | A stale analysis response is ignored when the selection changes in flight | S0 | Route `/api/analyze` with a 2.5 s delay. Press Analyse, change End before the response arrives, wait. Existing findings remain unchanged; without prior analysis, `.inspector-content` stays hidden. The button is re-enabled. |
+| 16 | A stale analysis response is ignored when another file loads in flight | S0 | Same delayed route. Press Analyse, load a second file (a copy with another name), wait. Empty inspector states appear, new file name is shown, and the button is enabled. |
 | 17 | No horizontal overflow at 390, 1024 and 1280, EQ closed and open, results showing | S0 | For each width: `document.documentElement.scrollWidth` equals `clientWidth`. Today's UI has one theme only. |
-| 18 | No horizontal overflow in both themes at 390, 1024 and 1280 | S1 | As row 17 with the theme set to Light and Dark. |
-| 19 | Theme: System, Light, Dark work; no flash of the wrong theme on reload; canvases redraw on change | S1 | Switch each option, reload with the stored choice, take screenshots in both themes and inspect them. |
-| 20 | Fixture passage: energy, blocks and playhead line up with the waveform at three zoom levels | S2 | Analyse with the fixture (passage starts at 120 s). At three zoom levels compare the x positions of the energy line, the block edges and the playhead with the waveform for the same track time. |
-| 21 | Zoom and pan never change the selection | S2 | Read Start and End before and after zooming and panning. |
-| 22 | `+` and `-` typed into Start, End, notes and EQ fields do not zoom | S2 | Type the characters into each field and confirm the zoom level and the field text. |
-| 23 | Zoom announcements are debounced | S2 | Zoom repeatedly in under a second and count entries in the `#liveStatus` log. |
-| 24 | Stale banner after a committed new selection; notes and marks kept | S3 | Analyse, mark a block, type notes, commit a new selection. Banner shows, notes and marks remain. |
-| 25 | "Play this block" plays the block | S3 | Click it and read `currentTime` and the playback bounds. |
-| 26 | Export records the analysed passage, not the current selection | S3 | Change the selection after analysing, export, read `passage`. |
-| 27 | Re-analysis announces what it cleared | S3 | Re-analyse after marking and read the `#liveStatus` log. |
+| 18 | No horizontal overflow in both themes at 390, 1024 and 1280 | S3 | As row 17 with the theme set to Light and Dark. |
+| 19 | Theme: System, Light, Dark work; no flash of the wrong theme on reload; canvases redraw on change | S3 | Switch each option, reload with the stored choice, take screenshots in both themes and inspect them. |
+| 20 | Fixture passage: energy, blocks and playhead line up with the waveform at three zoom levels | S5b | Analyse with the fixture (passage starts at 120 s). At three zoom levels compare the x positions of the energy line, the block edges and the playhead with the waveform for the same track time. |
+| 21 | Zoom and pan never change the selection | S5b | Read Start and End before and after zooming and panning. |
+| 22 | `+` and `-` typed into Start, End, notes and EQ fields do not zoom | S5b | Type the characters into each field and confirm the zoom level and the field text. |
+| 23 | Zoom announcements are debounced | S5b | Zoom repeatedly in under a second and count entries in the `#liveStatus` log. |
+| 24 | Stale banner after a committed new selection; notes and marks kept | S7 | Analyse, mark a block, type notes, commit a new selection. Banner shows, notes and marks remain. |
+| 25 | "Play this block" plays the block | S7 | Click it and read `currentTime` and the playback bounds. |
+| 26 | Export records the analysed passage, not the current selection | S7 | Change the selection after analysing, export, read `passage`. |
+| 27 | Re-analysis announces what it cleared | S7 | Re-analyse after marking and read the `#liveStatus` log. |
 | 28 | Window drop loads audio; dropping JSON on the EQ import still imports EQ | S4 | Dispatch drop events carrying a WAV on the window and a note JSON on the EQ import. |
-| 29 | Keyboard path through inspector tabs and the block strip | S5 | Tab and arrow through inspector tabs, then the strip, mark a block, export. |
-| 30 | EQ model matches `BiquadFilterNode.getFrequencyResponse` within 0.1 dB; export and import round trip | S6 | Compare the model curve to the node response at the plotted frequencies for several presets. |
+| 29 | Keyboard path through inspector tabs and the block strip | S6 | Tab and arrow through inspector tabs, then the strip, mark a block, export. |
+| 30 | EQ model matches `BiquadFilterNode.getFrequencyResponse` within 0.1 dB; export and import round trip | S7 | Compare the model curve to the node response at the plotted frequencies for several presets. |
 | 31 | Screenshots in both themes inspected | S7 | Capture at 390 and 1280 in Light and Dark and look at each image. |
 
 ## Baseline: S0 rows against the unchanged UI
@@ -83,3 +83,36 @@ Rows 18 to 31 start in later slices and were not run.
 3. At the default 720 px height the waveform sits below the fold. Drag checks need a taller viewport.
 4. The only console error was `favicon.ico` 404.
 5. Not checked: touch, screen readers, Firefox, Safari, WebKitGTK, whether audio is audible, EQ audio output.
+
+
+## Final S7 validation: 2026-11-13, Codex
+
+Tasks 11–14 are implemented and await Claude/Opus review. Chromium via playwright-cli, named session `ohrin-revamp`, worktree server on 8791. Only the generated tone and synthetic fixture (including unavailable-model and shifted-passage variants) were used. No real audio.
+
+| Width | System | Light | Dark |
+|---|---|---|---|
+| 390 | Pass | Pass | Pass |
+| 1024 | Pass | Pass | Pass |
+| 1280 | Pass | Pass | Pass |
+
+Each cell covers the common, zoom, inspector-tabs, three-level axis, drop/playhead, and final stale/EQ groups. EQ was open and closed for overflow checks. System was exercised with emulated light preference. All 54 groups pass after the reset fix; the common group was repeated in all nine cells after a first trial exposed that bug.
+
+| Rows | Observed validation |
+|---|---|
+| 1 | Keyboard End/Start, Tab, Enter Analyse. Additional keyboard Open/Enter opened the native chooser; automated upload delivered the generated WAV. |
+| 2–7 | One tab stop in strip; arrows/Home/End; Enter selects; active tab/panel then Play and marking controls in Tab order; Space/Enter mark and clear with focus preserved; actual schema-v3 download. |
+| 8–9, 11 | One non-empty live-region mutation per action, observed with MutationObserver. This is a proxy for speech output. |
+| 10 | Preset/Trim settings exported, reset/imported in every matrix cell. Additional reload/import/export had exactly equal JSON eq objects, and import did not enable EQ. |
+| 12–16 | Cancel/buttons:0 abandons; committed drag keeps stale findings; explicitly gated responses discarded after selection or file change. Selected-block/new-file reset regression fixed and rerun. |
+| 17–18 | scrollWidth equals clientWidth, all nine cells, EQ closed/open. |
+| 19 | System removes data-theme; Light/Dark apply their setting; stored theme restored by head script on reload; canvas theme changes visible in screenshots. No-flash is a head-script/persistence proxy, not a frame-by-frame measurement. |
+| 20–23 | Canvas energy coordinates, DOM block edges and playhead align within 1.5 CSS px at spans 38.4,25.6,17.0667 s; selection unchanged by view changes; actual minus keys in inputs/notes/Trim do not zoom; repeated zoom gives one debounced message. Ctrl-wheel prevented, plain vertical wheel untouched, overview/follow paths passed. |
+| 24–27 | Exact stale banner retains notes/marks; block range independent of selection/Loop stops once; export uses analysed passage; reanalysis clears and announces applicable marks/notes. Failed/discarded requests retain prior association; server-adjusted bounds do not falsely mark fresh results stale. |
+| 28 | Window drop loads generated WAV; EQ file-input drop not intercepted, audio unchanged, drop class cleared. Native file selection/import exercised separately (drop default action proxy). |
+| 29 | All tabs, automatic arrows/Home/End/wrap, persistent note node identity/values/export, exact block message and preserved focus, reduced-motion offscreen scrolling, no-model reason with hidden tally and measured lane retained. |
+| 30 | Four presets versus actual BiquadFilterNode.getFrequencyResponse, 512 frequencies each: worst error 0.0000076403 dB (<0.1 dB). EQ reload/import/export JSON equality passed. |
+| 31 | Inspected Light/Dark screenshots at all three widths, plus stale full-track view: readable controls/labels, no clipping/overlap, hatch/plain-gap distinction and responsive inspector placement. |
+
+Additional checks: waveform canvas width/height is not reset per playback frame; analysis builds the block strip once (four nodes, not eight); stale opacity affects fill only (0.4), while glyphs/labels/radios/banner stay 1 and Play/Export stay enabled; Not analysed uses plain fill.
+
+Final automated suites: 95 Node tests pass; 252 Python tests pass. No known failing application check remains. Unverified: physical touch, screen-reader speech, human listening/audio output, Firefox/Safari/WebKitGTK, Windows/macOS, CPU/memory on long tracks and literal first-paint flash timing. Task 15 final review remains Claude's work.

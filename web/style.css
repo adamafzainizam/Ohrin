@@ -76,33 +76,17 @@ input[type=number]{font-family:var(--font-mono);font-variant-numeric:tabular-num
 .empty-title{margin:0;font-size:18px;font-weight:600}
 .empty-state .subtle{margin:0 0 8px}
 body.dropping .lane-area{outline:2px solid var(--accent);outline-offset:4px;border-radius:var(--r-panel)}
-.wave-wrap{border-radius:var(--r-panel);background:var(--surface-1);border:1px solid var(--line);padding:8px}
+.wave-wrap{border-radius:var(--r-panel);background:var(--surface-1);border:1px solid var(--line);padding:0;overflow:hidden}
 .wave-wrap[hidden]{display:none}
-#waveform{height:180px;cursor:crosshair;touch-action:none}
+#waveform{height:120px;cursor:crosshair;touch-action:none}
 .wave-caption{display:flex;justify-content:space-between;color:var(--text-muted);font-size:12px;padding:4px 4px 0}
 #durationLabel{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
 .selection-bar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px;margin-top:12px;padding:8px 12px;background:var(--surface-1);border:1px solid var(--line);border-radius:var(--r-panel)}
-.selection-label{margin:0;flex:1 1 200px;min-width:0;color:var(--text-muted);font-size:12px;font-variant-numeric:tabular-nums}
+.selection-label{font-family:var(--font-mono);margin:0;flex:1 1 200px;min-width:0;color:var(--text-muted);font-size:12px;font-variant-numeric:tabular-nums}
 
-/* Inspector and results (placeholders until the inspector tasks) */
+/* Inspector and results */
 .inspector{display:flex;flex-direction:column;gap:12px}
 
-.section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 12px}
-.section-head h2{font-size:18px;margin:0;font-weight:600}
-.next-head{margin-top:24px}
-.tag{color:var(--text-muted);border:1px solid var(--line-strong);border-radius:var(--r-ctl);padding:2px 8px;font-size:12px}
-.energy-card,.panel{border:1px solid var(--line);background:var(--surface-1);border-radius:var(--r-panel)}
-.energy-card{padding:14px}
-.card-top{display:flex;justify-content:space-between;gap:12px;align-items:center;font-size:13px;flex-wrap:wrap}
-.card-top span{color:var(--text-muted);font-size:12px}
-.energy-card canvas{height:190px;margin-top:12px}
-.energy-card .subtle{margin:8px 0 0}
-.result-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;margin-top:12px}
-.panel{padding:16px}
-.panel-label{font-size:12px;color:var(--text-muted)}
-.panel h3{font-size:15px;margin:4px 0 10px;font-weight:600}
-.panel ul{padding-left:18px;line-height:1.6;font-size:15px;margin:0 0 10px}
-.panel li+li{margin-top:8px}
 .candidate-list,.chord-list{display:flex;gap:8px;flex-wrap:wrap}
 .candidate{border:1px solid var(--line-strong);border-radius:var(--r-ctl);padding:8px 10px;background:var(--surface-2)}
 .candidate strong{display:block;font-size:13px}
@@ -112,7 +96,7 @@ body.dropping .lane-area{outline:2px solid var(--accent);outline-offset:4px;bord
 .idea{color:var(--text);font-size:15px;line-height:1.5}
 .export-note{margin:16px 0 0}
 
-/* Narrow: two-row top bar at 390 and below */
+/* Narrow: two-row top bar at 480 and below */
 @media(max-width:480px){
   :root{--topbar-h:96px}
   .topbar{flex-wrap:wrap;gap:8px 10px;padding:8px 12px;align-content:flex-start}
@@ -125,9 +109,14 @@ body.dropping .lane-area{outline:2px solid var(--accent);outline-offset:4px;bord
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
 
-.timeline{--chart-left:32px;--chart-right:12px;margin-top:20px;border-top:1px solid var(--line);padding-top:16px}.timeline-rows{margin-top:12px}.timeline-label{font-size:11px;color:var(--text-muted);margin:10px 0 4px var(--chart-left)}.timeline-track{position:relative;height:34px;margin:0 var(--chart-right) 0 var(--chart-left);background:var(--surface-0);border:1px solid var(--line);border-radius:4px;overflow:hidden}.tl-cell{position:absolute;top:0;bottom:0;border:1px solid transparent;border-left-color:var(--line);box-sizing:border-box}.tl-cell.short{border:1px dashed var(--accent)}.tl-fill{position:absolute;left:0;right:0;bottom:0}.tl-cell.below .tl-fill{background:repeating-linear-gradient(45deg,var(--hatch) 0 2px,transparent 2px 5px);opacity:.75}.tl-cell.above{outline:2px solid var(--accent);outline-offset:-2px}.tl-cell.above .tl-fill{background:var(--accent)}.tl-threshold{position:absolute;left:0;right:0;height:0;border-top:1px solid var(--accent);pointer-events:none;z-index:2}.tl-uncovered{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(-45deg,var(--line) 0 3px,transparent 3px 7px);color:var(--text-muted);font-size:10px;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap}.timeline .subtle{margin:10px 0 0}.tl-cell{padding:0;margin:0;background:transparent;font:inherit;color:inherit;cursor:pointer}.tl-cell:focus-visible{outline:2px solid var(--focus);outline-offset:-2px;z-index:3}.tl-cell.selected{box-shadow:inset 0 0 0 2px var(--accent)}.tl-glyph{position:absolute;top:1px;right:3px;font-size:12px;font-weight:700;color:var(--text);z-index:1}.review-tally{font-size:13px;margin:14px 0 4px}.review-fields{margin:8px 0 0;padding:0;border:0;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:12px;color:var(--text-muted)}.review-fields label{display:inline-flex;align-items:center;gap:5px;cursor:pointer}.review-fields input{accent-color:var(--accent)}.review-clear{background:transparent;border:0;color:var(--accent);font-size:12px;text-decoration:underline;padding:4px 6px;min-height:24px}.segment-review{margin-top:14px;padding:14px;border:1px solid var(--line);border-radius:6px;background:var(--surface-0)}.segment-review h4{margin:0 0 8px;font-size:14px}.segment-review .secondary-button{padding:7px 11px;margin-bottom:8px}.segment-class{margin-top:8px;font-size:12px}
+.tl-cell{position:absolute;top:0;bottom:0;padding:0;margin:0;background:transparent;font:inherit;color:inherit;cursor:pointer;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+.tl-fill{position:absolute;left:0;right:0;bottom:0}
+.tl-glyph{position:absolute;top:1px;right:3px;font-size:12px;font-weight:700;color:var(--text);z-index:1}.review-tally{font-size:13px;margin:14px 0 4px}.review-fields{margin:8px 0 0;padding:0;border:0;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:12px;color:var(--text-muted)}.review-fields label{display:inline-flex;align-items:center;gap:5px;cursor:pointer}.review-fields input{accent-color:var(--accent)}.review-clear{background:transparent;border:0;color:var(--accent);font-size:12px;text-decoration:underline;padding:4px 6px;min-height:24px}.segment-review{margin-top:14px;padding:14px;border:1px solid var(--line);border-radius:6px;background:var(--surface-0)}.segment-review h4{margin:0 0 8px;font-size:14px}.segment-review .secondary-button{padding:7px 11px;margin-bottom:8px}.segment-class{margin-top:8px;font-size:12px}
 
-.block-strip{position:relative;height:30px;margin:6px var(--chart-right) 0 var(--chart-left)}.tl-block{position:absolute;top:0;bottom:0;padding:0;margin:0;background:var(--surface-0);color:var(--text-muted);border:1px solid var(--line-strong);border-radius:4px;font-size:11px;box-sizing:border-box;overflow:hidden}.tl-block:hover{border-color:var(--accent)}.tl-block:focus-visible{outline:2px solid var(--focus);outline-offset:-2px;z-index:3}.tl-block.selected{border-color:var(--accent);color:var(--text);box-shadow:inset 0 0 0 1px var(--accent)}
+.tl-block{padding:0;margin:0;background:var(--surface-0);color:var(--text-muted);border:1px solid var(--line-strong);border-radius:4px;overflow:hidden}
+.tl-block:hover{border-color:var(--accent)}
+.tl-block:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.tl-block.selected{border-color:var(--accent);color:var(--text)}
 
 
 .eq-controls, .eq-editor { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; }
@@ -138,15 +127,12 @@ body.dropping .lane-area{outline:2px solid var(--accent);outline-offset:4px;bord
 .eq-handle { position: absolute; transform: translate(-50%, -50%); width: 28px; height: 28px; min-width: 0; padding: 0; border-radius: 50%; background: var(--surface-2); color: var(--accent); border: 2px solid var(--accent); touch-action: none; }
 .eq-handle.selected { background: var(--accent); color: var(--on-accent); }
 .eq-handle.disabled { opacity: .55; }
-.eq-handle:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+.eq-handle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .eq-warning { color: var(--accent); }
 @media (pointer: coarse) { .eq-handle { width: 44px; height: 44px; } }
 .eq-panel > .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-input[type=number]{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
-
 /* Shared time axis: every plot uses the same gutter and content width. */
-.wave-wrap{padding:0;overflow:hidden}
 .lane-stack{position:relative;overflow-x:clip;min-width:0}
 .lane-stack:focus-visible{outline-offset:-2px}
 .lane-row{display:grid;grid-template-columns:minmax(0,1fr);min-width:0}
@@ -155,21 +141,19 @@ input[type=number]{font-family:var(--font-mono);font-variant-numeric:tabular-num
 .overview-row{margin-bottom:12px;background:var(--surface-1);border:1px solid var(--line);border-radius:var(--r-panel);overflow:hidden}
 .overview{height:36px;position:relative;touch-action:none}
 .overview canvas{height:36px}
-.overview-view{position:absolute;top:2px;height:32px;border:1px solid var(--line-strong);pointer-events:none}
+.overview-view{position:absolute;top:2px;height:32px;border:1px solid var(--line-strong);pointer-events:auto;cursor:grab}
 #ruler{height:32px}
-#waveform{height:120px}
 #energyChart{height:64px}
 .instrument-track{position:relative;height:28px;background:var(--surface-1)}
 .lane-provenance{font-size:12px;color:var(--text-muted);margin:6px 8px}
 .lane-unanalysed{position:absolute;top:0;bottom:0;background:var(--surface-2);color:var(--text-muted);font-size:12px;line-height:28px;white-space:nowrap;overflow:hidden;padding:0 6px}
-.instrument-track .tl-cell{border-color:var(--line);border-radius:4px;overflow:hidden;outline:0;box-shadow:none}
 .instrument-track .tl-cell.short{border:1px dashed var(--line-strong)}
 .instrument-track .tl-cell .tl-fill{background:repeating-linear-gradient(45deg,var(--hatch) 0 1px,transparent 1px 4px);opacity:1}
 .instrument-track .tl-cell.selected{outline:2px solid var(--accent);outline-offset:-2px}
 .playhead-axis{position:absolute;top:0;bottom:0;left:0;right:0;pointer-events:none;overflow:hidden}
 .playhead{position:absolute;top:0;bottom:0;left:-1px;width:2px;background:var(--playhead);will-change:transform}
 .block-strip{position:static;display:flex;flex-wrap:wrap;gap:4px;height:auto;margin:8px}
-.block-strip .tl-block{position:static;flex:none;width:32px;height:32px;font-size:12px}
+.block-strip .tl-block{flex:none;width:32px;height:32px;font-size:12px}
 .lane-skeleton{background:var(--surface-2)}
 .wave-caption,#energyCaption,#timelineCaption{margin:8px;font-size:12px}
 @media(min-width:1280px){
@@ -181,8 +165,7 @@ input[type=number]{font-family:var(--font-mono);font-variant-numeric:tabular-num
 /* Timeline navigation keeps the ruler canvas on the same axis as every plot. */
 .ruler-content{min-width:0}
 .zoom-controls{display:flex;justify-content:flex-end;gap:4px;padding:4px 4px 0;min-height:28px}
-.zoom-controls button{min-width:24px;min-height:24px;padding:2px 7px;font-size:12px}
-.overview-view{pointer-events:auto;cursor:grab;box-sizing:border-box}
+.zoom-controls button{min-width:24px;min-height:24px;padding:2px 7px;font-size:12px;background:var(--surface-2);color:var(--text);border:1px solid var(--line-strong);border-radius:var(--r-ctl)}
 .overview-view:active{cursor:grabbing}
 
 /* Inspector panels remain mounted so corrections survive tab changes. */
@@ -197,3 +180,10 @@ input[type=number]{font-family:var(--font-mono);font-variant-numeric:tabular-num
 .idea-label{border:1px dashed var(--line-strong);padding:4px 8px;font-size:12px;display:inline-block}
 .inspector{padding:12px;background:var(--surface-1);border:1px solid var(--line);border-radius:var(--r-panel)}
 .results>h2{font-size:18px;margin:0}
+
+/* Staleness affects measured/model decoration, never labels, marks or controls. */
+.stale-banner{margin:12px 0;padding:10px 12px;border:1px solid var(--line-strong);border-radius:var(--r-panel);background:var(--surface-2);font-size:13px;color:var(--text)}
+.findings-stale .instrument-track .tl-cell .tl-fill{opacity:.4}
+.inspector-panel ul{padding-left:18px;line-height:1.6;margin:0 0 10px}
+.inspector-panel li+li{margin-top:8px}
+.candidate small{font-family:var(--font-mono)}

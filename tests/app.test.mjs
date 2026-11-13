@@ -330,3 +330,4 @@ test('EQ note exports settings only and adds limitation only for nonflat bands',
   walk(shaped);assert.equal(shaped.eq.bands[1].gain_db,6);
 });
 import './lanes-model.test.mjs';
+import './instruments-lane.test.mjs';

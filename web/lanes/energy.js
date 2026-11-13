@@ -30,7 +30,7 @@ export function createEnergyLane() {
       const y = 4 + Math.max(0, Math.min(1, -item.rms_dbfs / 40)) * 56;
       if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
     });
-    ctx.strokeStyle = p.dataMeasured; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = state.findingsStale ? p.waveDim : p.dataMeasured; ctx.lineWidth = 2; ctx.stroke();
   }
   return { mount(target) { el = target; }, render(next) { args = next; draw(); }, reposition(next) { args = { ...args, ...next }; draw(); } };
 }

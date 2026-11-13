@@ -89,7 +89,7 @@ export function createInspector({ store, announce, transport }) {
         h.textContent = `Segment ${formatTime(seg.start_s)}–${formatTime(seg.end_s)} (≈${(seg.end_s - seg.start_s).toFixed(1)} s block)`;
         const play = document.createElement('button'); play.type = 'button'; play.className = 'secondary-button'; play.textContent = 'Play this block';
         play.dataset.focusId = 'seg-play';
-        play.addEventListener('click', () => { transport.seek(seg.start_s); transport.play(); });
+        play.addEventListener('click', () => { transport.playRange(seg.start_s, seg.end_s); });
         box.append(h, play);
         for (const c of info.classes) {
           const wrap = document.createElement('div'); wrap.className = 'segment-class';

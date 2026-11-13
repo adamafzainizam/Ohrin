@@ -69,3 +69,20 @@ test('a paused playRange does not leave loop and stop disabled', async t => {
   player.emit('timeupdate');
   assert.equal(player.currentTime, 2);
 });
+
+test('completed block playback stays at its end on later paused timeupdates', async t => {
+  stubRaf(t);
+  globalThis.requestAnimationFrame = () => 1;
+  const player = fakePlayer();
+  const store = createStore({ selection: { start: 2, end: 5 } });
+  const transport = createTransport({ player, store, announce() {}, isLooping: () => true });
+  await transport.playRange(10, 12);
+  player.currentTime = 12.1;
+  player.emit('timeupdate');
+  assert.equal(player.paused, true);
+  player.emit('timeupdate'); // native audio can queue another event after pause
+  assert.equal(player.currentTime, 12.1);
+  transport.seek(20); // a paused seek outside the selected passage must stay there too
+  player.emit('timeupdate');
+  assert.equal(player.currentTime, 20);
+});

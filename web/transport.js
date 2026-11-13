@@ -57,11 +57,11 @@ export function createTransport({ player, store, announce, resume = async () => 
   player.addEventListener('ended', stopLoop);
   player.addEventListener('timeupdate', () => {
     if (rangeEnd !== null) { checkRange(); if (player.paused) emitFrame(); return; }
+    if (player.paused) { emitFrame(); return; }
     const { selection } = store.get();
     const loop = isLooping();
     if (shouldLoop(player.currentTime, selection, loop)) player.currentTime = selection.start;
     else if (shouldStop(player.currentTime, selection, loop)) { player.pause(); player.currentTime = selection.end; }
-    // While paused (seek, new file load) timeupdate is the only signal, so redraw here as before.
     if (player.paused) emitFrame();
   });
 

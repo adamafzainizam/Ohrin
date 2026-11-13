@@ -6,12 +6,12 @@ import { createInstrumentsLane } from './lanes/instruments.js';
 import { createPlayhead } from './lanes/playhead.js';
 import { initEq } from './eq-ui.js';
 import { initTheme, getPalette, onInvalidate, observeCanvasHost } from './theme.mjs';
-import { createStore, fileLoaded } from './store.mjs';
+import { createStore, fileLoaded, isStale } from './store.mjs';
 import { createTransport } from './transport.js';
 import { createInspector } from './inspector.js';
 import { fit, formatTenths, zoomAt, pan, followPage, xToTime } from './timeline.mjs';
 import { pickAudioFile, zoomKeyAllowed, zoomFactorFromWheel } from './input-rules.mjs';
-import { clampSelection, formatTime, emptyReview, reviewKey, reconcileReview, pruneReview,
+import { clampSelection, formatTime, reviewKey, reconcileReview, pruneReview,
   settleRequest, buildPassageNote } from './state.mjs';
 
 const $ = id => document.getElementById(id);
@@ -21,10 +21,10 @@ const canvas = $('waveform');
 const store = createStore();
 let objectUrl = null;
 let requestSeq = 0;
-const eq = initEq({ player, announce, fitCanvas });
+const eq = initEq({ player, announce });
 const transport = createTransport({ player, store, announce, resume: () => eq.resume(), isLooping: () => $('loop').checked });
 transport.bindControls({ playButton: $('playButton'), speed: $('speed') });
-const inspector = createInspector({ store, announce, transport, fitCanvas });
+const inspector = createInspector({ store, announce, transport });
 const overviewLane = createOverviewLane();
 const rulerLane = createRulerLane();
 const waveformLane = createWaveformLane();
@@ -52,7 +52,7 @@ energyLane.mount($('energyChart'), actions);
 instrumentsLane.mount($('instrumentTimeline'), actions);
 playhead.mount($('playhead'), actions);
 function laneArgs() {
-  return { state: store.get(), view: store.get().view, widthPx: Math.max(1, canvas.getBoundingClientRect().width), palette: getPalette() };
+  return { state: { ...store.get(), findingsStale: isStale(store.get()) }, view: store.get().view, widthPx: Math.max(1, canvas.getBoundingClientRect().width), palette: getPalette() };
 }
 function preserveFocus(fn) {
   const focusId = document.activeElement?.dataset?.focusId;
@@ -68,15 +68,19 @@ function renderLanes(full = false) {
 store.subscribe('view', () => renderLanes());
 store.subscribe('selection', () => {
   if (!store.get().duration || store.get().view.end_s <= store.get().view.start_s) return;
-  const args = laneArgs(); overviewLane.render(args); waveformLane.render(args);
+  const args = laneArgs(); overviewLane.render(args); waveformLane.render(args); energyLane.render(args);
+  renderStale();
 });
+let lastLaneUi = store.get();
 store.subscribe('analysis', () => preserveFocus(() => {
-  renderLanes(true); inspector.render('analysis');
+  renderLanes(true); inspector.render('analysis'); renderStale();
+  // Analysis already rendered its final loading state. Do not rebuild the
+  // same lane DOM again when the request's finally block publishes ui.
+  lastLaneUi = store.get();
 }));
 store.subscribe('review', () => preserveFocus(() => {
   instrumentsLane.update(store.get()); inspector.render('review');
 }));
-let lastLaneUi = store.get();
 store.subscribe('ui', state => {
   if (state.file !== lastLaneUi.file || state.duration !== lastLaneUi.duration || state.analysing !== lastLaneUi.analysing) {
     if (state.duration) renderLanes(true);
@@ -175,27 +179,18 @@ function announce(text) {
   region.textContent = '';
   setTimeout(() => { region.textContent = text; }, 50);
 }
-function clearPassageFindings() {
-  store.set('analysis', { analysis: null, analysisRequest: null, review: emptyReview(), selectedBlock: null });
-  $('chordCorrection').value = '';
-  $('arrangementNotes').value = '';
+function renderStale() {
+  const state = store.get();
+  const stale = isStale(state);
+  $('staleBanner').hidden = !stale;
+  $('laneStack').classList.toggle('findings-stale', stale);
+  if (stale) {
+    const req = state.analysisRequest;
+    setText('staleBanner', `Findings are from the previous passage (${formatTenths(req.start)} to ${formatTenths(req.end)}). Analyse again to update. Export the note first to keep your notes and marks.`);
+  }
 }
-function fitCanvas(target) {
-  const ratio = window.devicePixelRatio || 1;
-  const box = target.getBoundingClientRect();
-  const w = Math.max(1, box.width);
-  const h = Math.max(1, box.height);
-  target.width = Math.round(w * ratio);
-  target.height = Math.round(h * ratio);
-  const ctx = target.getContext('2d');
-  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-  return { ctx, w, h };
-}
-
 function updateSelection(start, end) {
-  const { selection } = store.get();
   const next = clampSelection(start, end, player.duration);
-  if (next.start !== selection.start || next.end !== selection.end) clearPassageFindings();
   store.set('selection', { selection: next });
   refreshSelectionUI();
 }
@@ -212,10 +207,15 @@ async function loadFile(chosen) {
   if (objectUrl) URL.revokeObjectURL(objectUrl);
   clearTimeout(viewAnnouncement);
   transport.cancel(); eq.fileChanged();
-  player.pause(); waveformLane.clear(); store.set('ui', { file: chosen, analysing: false });
+  player.pause(); waveformLane.clear();
+  const { view: emptyView, ...reset } = fileLoaded(store.get(), chosen, 0);
+  store.set('ui', { ...reset, selection: { start: 0, end: 0 }, analysing: false });
+  store.set('view', { view: emptyView });
+  store.set('analysis', {});
+  $('chordCorrection').value = ''; $('arrangementNotes').value = '';
+  $('emptyState').hidden = false; $('waveWrap').hidden = true; $('overviewWrap').hidden = true;
   requestSeq += 1; // invalidate any in-flight analysis; it no longer owns the button
   resetAnalyzeButton();
-  clearPassageFindings();
   objectUrl = URL.createObjectURL(chosen);
   setText('fileName', chosen.name);
   updateExport();
@@ -227,6 +227,7 @@ async function loadFile(chosen) {
       player.onerror = () => reject(new Error('The browser could not play this file.'));
       player.src = objectUrl;
     });
+    if (store.get().file !== chosen) return;
     if (!Number.isFinite(player.duration) || player.duration < 1) throw new Error('The audio duration could not be read.');
     for (const id of ['playButton', 'startTime', 'endTime', 'speed', 'loop', 'analyzeButton', 'eqDisclosure']) $(id).disabled = false;
     $('startTime').max = player.duration;
@@ -234,9 +235,8 @@ async function loadFile(chosen) {
     $('emptyState').hidden = true; $('waveWrap').hidden = false; $('overviewWrap').hidden = false;
     setText('durationLabel', formatTime(player.duration));
     updateReadout(player.currentTime || 0);
-    const { view, ...loaded } = fileLoaded(store.get(), chosen, player.duration);
-    store.set('ui', loaded);
-    store.set('view', { view });
+    store.set('ui', { duration: player.duration });
+    store.set('view', { view: fit(0, player.duration, player.duration) });
     updateSelection(0, Math.min(30, player.duration));
     await waveformLane.loadFile(chosen);
     if (store.get().file === chosen) renderLanes(true);
@@ -276,7 +276,9 @@ $('analyzeButton').addEventListener('click', async () => {
   if (!file || selection.end - selection.start < 1) { setText('selectionLabel', 'Select at least one second.'); return; }
   const button = $('analyzeButton'); button.disabled = true; button.textContent = 'Analysing…';
   requestSeq += 1;
-  store.set('ui', { analysisRequest: { start: selection.start, end: selection.end }, analysing: true });
+  // Keep analysisRequest paired with the findings still displayed. The sent
+  // selection lives in requested until a successful response replaces both.
+  store.set('ui', { analysing: true });
   const requested = { id: requestSeq, file, selection: { start: selection.start, end: selection.end } };
   const settle = () => settleRequest(requested, { id: requestSeq, file: store.get().file, selection: store.get().selection });
   try {
@@ -285,8 +287,18 @@ $('analyzeButton').addEventListener('click', async () => {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Analysis failed.');
     if (settle().stale) return;
-    const review = pruneReview(reconcileReview(store.get().review, reviewKey(file, result.passage)), result.instruments);
-    store.set('analysis', { analysis: result, review, selectedBlock: null, analysing: false });
+    const previous = store.get();
+    const key = reviewKey(file, result.passage);
+    const different = previous.analysis && previous.review.key !== key;
+    const marks = different ? Object.keys(previous.review.labels).length : 0;
+    const hadNotes = different && Boolean($('chordCorrection').value || $('arrangementNotes').value);
+    const review = pruneReview(reconcileReview(previous.review, key), result.instruments);
+    if (different) { $('chordCorrection').value = ''; $('arrangementNotes').value = ''; }
+    store.set('analysis', { analysis: result, analysisRequest: requested.selection, review, selectedBlock: null, analysing: false });
+    if (marks || hadNotes) {
+      const what = [marks ? `${marks} mark${marks === 1 ? '' : 's'}` : '', hadNotes ? 'your notes' : ''].filter(Boolean).join(' and ');
+      announce(`${what[0].toUpperCase()}${what.slice(1)} ${marks === 1 && !hadNotes ? 'was' : 'were'} cleared for the new passage`);
+    }
     setView(fit(result.passage.start_s, result.passage.end_s, store.get().duration));
   } catch (error) {
     if (!settle().stale) { setText('selectionLabel', error.message); announce(error.message); }

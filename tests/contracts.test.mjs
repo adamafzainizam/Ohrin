@@ -124,3 +124,9 @@ test('inspector tabs own labelled persistent panels and note fields', () => {
     if (name === 'arrange') assert.match(panel[1], /id="arrangementNotes"/);
   }
 });
+
+test('stale findings have a separate banner without disabling note controls', () => {
+  assert.match(indexHtml, /id="staleBanner"[^>]*hidden/);
+  assert.equal([...indexHtml.matchAll(/id="chordCorrection"/g)].length, 1);
+  assert.equal([...indexHtml.matchAll(/id="arrangementNotes"/g)].length, 1);
+});

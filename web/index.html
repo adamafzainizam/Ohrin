@@ -52,6 +52,7 @@
         <p id="selectionLabel" class="selection-label">No audio loaded.</p>
         <button id="analyzeButton" class="primary-button" type="button" disabled>Analyse passage</button>
       </div>
+      <p id="staleBanner" class="stale-banner" hidden></p>
       <div id="waveWrap" class="wave-wrap" hidden>
         <div id="laneStack" class="lane-stack" tabindex="0" aria-label="Time aligned audio lanes">
           <div class="lane-row ruler-row"><div class="lane-label">Time</div><div class="ruler-content"><div class="zoom-controls" role="group" aria-label="Timeline view"><button id="zoomOut" type="button" aria-label="Zoom out" disabled>−</button><button id="zoomIn" type="button" aria-label="Zoom in" disabled>+</button><button id="fitPassage" type="button" aria-label="Fit passage" disabled>Passage</button><button id="fitTrack" type="button" aria-label="Fit track" disabled>Track</button></div><canvas id="ruler" class="lane-plot" aria-label="Track time ruler"></canvas></div></div>

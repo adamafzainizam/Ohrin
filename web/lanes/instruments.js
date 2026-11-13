@@ -112,5 +112,5 @@ export function createInstrumentsLane() {
     reposition(next);
   }
   return { mount(target, callbacks) { el = target; actions = callbacks; }, render, reposition,
-    update(state) { args = { ...args, state }; if (!el.hidden && !state.analysing) updateMarks(); } };
+    update(state) { args = { ...args, state }; if (!el.hidden && !state.analysing && state.analysis?.instruments?.available) updateMarks(); } };
 }
