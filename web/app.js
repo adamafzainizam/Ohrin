@@ -45,7 +45,7 @@ const actions = {
   reveal: view => setView(view),
   programmaticFocus: () => quietFocus > 0,
   selectBlock(index) {
-    store.set('ui', { activeTab: 'instruments', selectedBlock: index });
+    store.set({ activeTab: 'instruments', selectedBlock: index });
     quiet(() => document.querySelector(`[data-focus-id="seg-${index}"]`)?.focus({ preventScroll: true }));
     const box = $('inspector').getBoundingClientRect();
     if (window.matchMedia('(max-width: 1279px)').matches && (box.top >= window.innerHeight || box.bottom <= 0)) {
@@ -123,19 +123,19 @@ transport.onFrame(t => {
   if (!player.paused && duration && !followPaused) setView(followPage(view, t, duration));
   playhead.move(t);
 });
-player.addEventListener('play', () => store.set('ui', { followPaused: false }));
+player.addEventListener('play', () => store.set({ followPaused: false }));
 
 let viewAnnouncement = null;
 // Returns whether the view actually changed.
 function setView(view) {
   const current = store.get().view;
   if (view.start_s === current.start_s && view.end_s === current.end_s) return false;
-  store.set('view', { view });
+  store.set({ view });
   return true;
 }
 function setUserView(view) {
   if (!setView(view)) return; // a no-op (zoom at the clamp, Track when fitted, a pan at an edge) is not a gesture
-  if (!player.paused) store.set('ui', { followPaused: true });
+  if (!player.paused) store.set({ followPaused: true });
   clearTimeout(viewAnnouncement);
   viewAnnouncement = setTimeout(() => {
     const current = store.get().view;
@@ -211,7 +211,7 @@ function renderStale() {
 function updateSelection(start, end) {
   if (!Number.isFinite(player.duration)) return;
   const next = clampSelection(start, end, player.duration);
-  store.set('selection', { selection: next });
+  store.set({ selection: next });
   refreshSelectionUI();
 }
 
@@ -229,13 +229,8 @@ async function loadFile(chosen) {
   transport.cancel(); eq.fileChanged();
   player.pause(); waveformLane.clear();
   setTransportEnabled(false);
-  // Publish the reset on the topics that own each key. ui and view first, so nothing redraws with
-  // the old duration; analysis last, which clears the old analysis DOM.
-  const { view: emptyView, analysis, analysisRequest, review, selectedBlock, ...base } = fileLoaded(store.get(), chosen, 0);
-  store.set('ui', { ...base, analysing: false });
-  store.set('view', { view: emptyView });
-  store.set('selection', { selection: { start: 0, end: 0 } });
-  store.set('analysis', { analysis, analysisRequest, review, selectedBlock });
+  // One publish: every subscriber sees the final state (no file duration, no analysis).
+  store.set({ ...fileLoaded(store.get(), chosen, 0), selection: { start: 0, end: 0 }, analysing: false });
   $('chordCorrection').value = ''; $('arrangementNotes').value = '';
   $('emptyState').hidden = false; $('waveWrap').hidden = true; $('overviewWrap').hidden = true;
   requestSeq += 1; // invalidate any in-flight analysis; it no longer owns the button
@@ -258,8 +253,7 @@ async function loadFile(chosen) {
     $('emptyState').hidden = true; $('waveWrap').hidden = false; $('overviewWrap').hidden = false;
     setText('durationLabel', formatTime(player.duration));
     updateReadout(player.currentTime || 0);
-    store.set('ui', { duration: player.duration });
-    store.set('view', { view: fit(0, player.duration, player.duration) });
+    store.set({ duration: player.duration, view: fit(0, player.duration, player.duration) });
     updateSelection(0, Math.min(30, player.duration));
     await waveformLane.loadFile(chosen);
     if (store.get().file === chosen) renderLanes(true);
@@ -275,8 +269,7 @@ function failLoad(message) {
   player.pause(); transport.cancel();
   if ($('eqDisclosure').getAttribute('aria-expanded') === 'true') $('eqDisclosure').click();
   setTransportEnabled(false);
-  store.set('ui', { duration: 0 });
-  store.set('view', { view: { start_s: 0, end_s: 0 } });
+  store.set({ duration: 0, view: { start_s: 0, end_s: 0 } });
   $('emptyState').hidden = false; $('waveWrap').hidden = true; $('overviewWrap').hidden = true;
   setText('durationLabel', '00:00'); setText('timeReadout', '00:00.0 / 00:00.0');
   setText('selectionLabel', message); announce(message);
@@ -322,7 +315,7 @@ $('analyzeButton').addEventListener('click', async () => {
   requestSeq += 1;
   // Keep analysisRequest paired with the findings still displayed. The sent
   // selection lives in requested until a successful response replaces both.
-  store.set('ui', { analysing: true });
+  store.set({ analysing: true });
   const requested = { id: requestSeq, file, selection: { start: selection.start, end: selection.end } };
   const settle = () => settleRequest(requested, { id: requestSeq, file: store.get().file, selection: store.get().selection });
   try {
@@ -340,7 +333,7 @@ $('analyzeButton').addEventListener('click', async () => {
     if (different) { $('chordCorrection').value = ''; $('arrangementNotes').value = ''; }
     // Fit the view first: the analysis publish below then draws the lanes once, with the final view.
     setView(fit(result.passage.start_s, result.passage.end_s, store.get().duration));
-    store.set('analysis', { analysis: result, analysisRequest: requested.selection, review, selectedBlock: null, analysing: false });
+    store.set({ analysis: result, analysisRequest: requested.selection, review, selectedBlock: null, analysing: false });
     if (marks || hadNotes) {
       const what = [marks ? `${marks} mark${marks === 1 ? '' : 's'}` : '', hadNotes ? 'your notes' : ''].filter(Boolean).join(' and ');
       announce(`${what[0].toUpperCase()}${what.slice(1)} ${marks === 1 && !hadNotes ? 'was' : 'were'} cleared for the new passage`);
@@ -348,7 +341,7 @@ $('analyzeButton').addEventListener('click', async () => {
   } catch (error) {
     if (!settle().stale) { setText('selectionLabel', error.message); announce(error.message); }
   } finally {
-    if (settle().ownsButton) { button.disabled = false; resetAnalyzeButton(); store.set('ui', { analysing: false }); }
+    if (settle().ownsButton) { button.disabled = false; resetAnalyzeButton(); store.set({ analysing: false }); }
   }
 });
 

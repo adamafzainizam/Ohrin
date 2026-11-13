@@ -2,6 +2,21 @@ import { emptyReview } from './state.mjs';
 
 export const TOPICS = Object.freeze(['selection', 'view', 'analysis', 'review', 'ui']);
 
+// Each state key belongs to exactly one topic; set() routes notifications by this map.
+export const KEY_TOPIC = Object.freeze({
+  selection: 'selection',
+  view: 'view',
+  analysis: 'analysis',
+  analysisRequest: 'analysis',
+  review: 'review',
+  file: 'ui',
+  duration: 'ui',
+  selectedBlock: 'ui',
+  activeTab: 'ui',
+  followPaused: 'ui',
+  analysing: 'ui',
+});
+
 function defaults() {
   return {
     file: null,
@@ -14,6 +29,7 @@ function defaults() {
     selectedBlock: null,
     activeTab: 'measured',
     followPaused: false,
+    analysing: false,
   };
 }
 
@@ -26,12 +42,22 @@ export function createStore(initial = {}) {
   const subs = new Map(TOPICS.map(t => [t, []]));
   return {
     get() { return state; },
-    set(topic, patch) {
-      checkTopic(topic);
+    // Apply the whole patch, then notify each topic with a changed key once, in TOPICS order.
+    set(patch) {
+      if (patch === null || typeof patch !== 'object' || Array.isArray(patch)) throw new TypeError('Store patch must be an object');
+      const keys = Object.keys(patch);
+      for (const key of keys) {
+        if (!Object.hasOwn(KEY_TOPIC, key)) throw new TypeError(`Unknown store key: ${key}`);
+      }
+      const changed = new Set();
+      for (const key of keys) if (!Object.is(state[key], patch[key])) changed.add(KEY_TOPIC[key]);
       state = { ...state, ...patch };
-      // One throwing subscriber must not skip the others.
-      for (const fn of [...subs.get(topic)]) {
-        try { fn(state); } catch (error) { console.error(`Store subscriber for "${topic}" failed:`, error); }
+      for (const topic of TOPICS) {
+        if (!changed.has(topic)) continue;
+        // One throwing subscriber must not skip the others.
+        for (const fn of [...subs.get(topic)]) {
+          try { fn(state); } catch (error) { console.error(`Store subscriber for "${topic}" failed:`, error); }
+        }
       }
     },
     subscribe(topic, fn) {
