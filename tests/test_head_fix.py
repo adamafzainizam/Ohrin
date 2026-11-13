@@ -1,5 +1,6 @@
 """Synthetic checks for Phase 1-lite. No OpenMIC audio and no shipped checkpoint."""
 
+import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,6 +11,8 @@ from experiments.head_fix import (
     BASS, DRUMS, TARGETS, _descriptive, _load_npz, _save_npz, assign_maskers, decide, mean_feature, mcnemar_exact,
     mixture_class_label, mixture_labels, select_pools, stop_checks,
 )
+
+HAS_TORCH = importlib.util.find_spec("torch") is not None
 
 
 class FeatureTests(unittest.TestCase):
@@ -142,6 +145,7 @@ if __name__ == "__main__":
     unittest.main()
 
 
+@unittest.skipUnless(HAS_TORCH, "PyTorch not installed")
 class DescriptiveCurveTests(unittest.TestCase):
     class _Pair:
         def __init__(self, target, masker):
