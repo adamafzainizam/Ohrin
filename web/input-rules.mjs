@@ -15,6 +15,12 @@ export function zoomFactorFromWheel({ deltaY, deltaMode }) {
   return Math.exp(-px * 0.002);
 }
 
+export function wheelIntent({ ctrlKey, metaKey, shiftKey, deltaX = 0, deltaY = 0 }) {
+  if (ctrlKey || metaKey) return 'zoom';
+  if (shiftKey || Math.abs(deltaX) > Math.abs(deltaY)) return 'pan';
+  return null;
+}
+
 export function pickAudioFile(files) {
   for (const f of files || []) {
     if (String(f.type || '').startsWith('audio/') || AUDIO_EXT.test(f.name || '')) return f;

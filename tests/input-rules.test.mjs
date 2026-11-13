@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { zoomKeyAllowed, zoomFactorFromWheel, pickAudioFile } from '../web/input-rules.mjs';
+import { zoomKeyAllowed, zoomFactorFromWheel, pickAudioFile, wheelIntent } from '../web/input-rules.mjs';
 
 test('zoom keys are blocked while typing or inside the EQ panel', () => {
   assert.equal(zoomKeyAllowed({ tagName: 'INPUT' }), false);
@@ -25,4 +25,15 @@ test('pickAudioFile takes the first audio file, case-insensitively', () => {
   assert.equal(pickAudioFile([{ type: 'application/json', name: 'eq.json' }, second]), second);
   assert.equal(pickAudioFile([{ type: 'audio/mpeg', name: 'x' }]).name, 'x');
   assert.equal(pickAudioFile([]), null);
+});
+
+test('wheelIntent routes zoom, pan and leaves vertical scroll alone', () => {
+  const base = { ctrlKey: false, metaKey: false, shiftKey: false, deltaX: 0, deltaY: 0 };
+  assert.equal(wheelIntent({ ...base, ctrlKey: true, deltaY: -10 }), 'zoom');
+  assert.equal(wheelIntent({ ...base, metaKey: true, deltaY: 10 }), 'zoom');
+  assert.equal(wheelIntent({ ...base, shiftKey: true, deltaY: 40 }), 'pan');
+  assert.equal(wheelIntent({ ...base, deltaX: 30, deltaY: 4 }), 'pan');
+  assert.equal(wheelIntent({ ...base, deltaX: 3, deltaY: 60 }), null);
+  assert.equal(wheelIntent({ ...base, deltaY: 60 }), null);
+  assert.equal(wheelIntent(base), null);
 });

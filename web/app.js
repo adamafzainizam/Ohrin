@@ -10,7 +10,7 @@ import { createStore, fileLoaded, isStale } from './store.mjs';
 import { createTransport } from './transport.js';
 import { createInspector } from './inspector.js';
 import { fit, formatTenths, zoomAt, pan, followPage, xToTime } from './timeline.mjs';
-import { pickAudioFile, zoomKeyAllowed, zoomFactorFromWheel } from './input-rules.mjs';
+import { pickAudioFile, zoomKeyAllowed, zoomFactorFromWheel, wheelIntent } from './input-rules.mjs';
 import { clampSelection, formatTime, reviewKey, reconcileReview, pruneReview,
   settleRequest, buildPassageNote } from './state.mjs';
 
@@ -142,13 +142,15 @@ const laneStack = $('laneStack');
 laneStack.addEventListener('wheel', event => {
   const { view, duration } = store.get();
   if (!duration) return;
+  const intent = wheelIntent(event);
+  if (!intent) return;
   const rect = canvas.getBoundingClientRect();
-  if (event.ctrlKey || event.metaKey) {
+  if (intent === 'zoom') {
     event.preventDefault();
     const x = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
     const anchor = xToTime(x, view, Math.max(1, rect.width));
     setUserView(zoomAt(view, anchor, Math.max(.01, Math.min(100, zoomFactorFromWheel(event))), duration));
-  } else if (event.shiftKey || event.deltaX) {
+  } else {
     event.preventDefault();
     const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.width : 1;
     const delta = event.deltaX || event.deltaY;
