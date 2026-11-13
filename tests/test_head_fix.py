@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from experiments.head_fix import (
-    TARGETS, _load_npz, _save_npz, assign_maskers, decide, mean_feature, mcnemar_exact,
+    BASS, DRUMS, TARGETS, _descriptive, _load_npz, _save_npz, assign_maskers, decide, mean_feature, mcnemar_exact,
     mixture_class_label, mixture_labels, select_pools, stop_checks,
 )
 
@@ -140,3 +140,40 @@ class StopRuleTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DescriptiveCurveTests(unittest.TestCase):
+    class _Pair:
+        def __init__(self, target, masker):
+            self.target, self.masker = target, masker
+
+    class _FixedModel:
+        """Returns constant logits per class column: drums ~0.88, bass ~0.12."""
+        def __init__(self):
+            self.logits = [0.0, -2.0, 2.0, 0.0]
+
+        def eval(self):
+            return self
+
+        def __call__(self, features):
+            import torch
+            return torch.tensor(self.logits).repeat(len(features), 1)
+
+    def setUp(self):
+        self.pairs = [self._Pair("t1", "m1"), self._Pair("t2", "m2")]
+        self.table = {f"{p.target}|{p.masker}|{r}": np.zeros(128) for p in self.pairs for r in (0, 6, 12)}
+        self.model = self._FixedModel()
+
+    def test_bass_curve_uses_the_bass_column_and_threshold(self):
+        thresholds = [0.5, 0.3, 0.5, 0.5]  # bass prob 0.12 is below 0.3; drums 0.88 is above
+        got = _descriptive(self.pairs, self.table, self.model, thresholds, BASS)
+        self.assertEqual(got, {"0": 0.0, "6": 0.0, "12": 0.0})
+        thresholds[BASS] = 0.1
+        got = _descriptive(self.pairs, self.table, self.model, thresholds, BASS)
+        self.assertEqual(got, {"0": 1.0, "6": 1.0, "12": 1.0})
+
+    def test_default_column_is_still_drums(self):
+        thresholds = [0.5, 0.5, 0.9, 0.5]  # drums prob 0.88 is below 0.9
+        self.assertEqual(_descriptive(self.pairs, self.table, self.model, thresholds)["6"], 0.0)
+        thresholds[DRUMS] = 0.8
+        self.assertEqual(_descriptive(self.pairs, self.table, self.model, thresholds)["6"], 1.0)

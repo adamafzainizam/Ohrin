@@ -29,6 +29,7 @@ import numpy as np
 
 TARGETS = ("guitar", "bass", "drums", "voice")
 DRUMS = TARGETS.index("drums")
+BASS = TARGETS.index("bass")
 OTHER = ("guitar", "bass", "voice")
 SEED = 42
 EXTRA_SEEDS = (43, 44, 45, 46)
@@ -407,14 +408,23 @@ def _fit_h2(train_x, train_y, train_m, val_x, val_y, val_m, seed):
     return model, thresholds, len(history)
 
 
-def _curve(pairs, feature_table, model, threshold, ratio):
+def _curve(pairs, feature_table, model, ratio, column=DRUMS):
     keys = [_mixture_id(pair.target, pair.masker, ratio) for pair in pairs]
-    return _probabilities(model, _stack(feature_table, keys))[:, DRUMS], [pair.target for pair in pairs], [pair.masker for pair in pairs]
+    return _probabilities(model, _stack(feature_table, keys))[:, column], [pair.target for pair in pairs], [pair.masker for pair in pairs]
+
+
+def _descriptive(group_pairs, mixtures, model, thresholds, column=DRUMS):
+    """Recall per ratio for one target class, scored with that class's column and threshold."""
+    out = {}
+    for ratio in RATIOS:
+        scores, _, _ = _curve(group_pairs, mixtures, model, ratio, column)
+        out[str(ratio)] = float(np.mean(_hits(scores, thresholds[column])))
+    return out
 
 
 def _score_head(name, model, thresholds, bundle, h0_hits):
     """Stop-rule numbers for one head on the primary 54 pairs, plus the descriptive curves."""
-    plus6, targets, maskers = _curve(bundle["primary"], bundle["mixtures"], model, thresholds[DRUMS], 6)
+    plus6, targets, maskers = _curve(bundle["primary"], bundle["mixtures"], model, 6)
     hits = _hits(plus6, thresholds[DRUMS])
     paired = paired_recall(h0_hits, hits, targets, maskers, bundle["n_boot"])
     unmixed = ap_report(bundle["test_y"], _probabilities(model, bundle["test_x"]), bundle["test_m"], thresholds)
@@ -424,7 +434,7 @@ def _score_head(name, model, thresholds, bundle, h0_hits):
     checks = stop_checks(paired["delta"]["value"], paired["delta"]["ci95"][0], drums_drop, other_drop, hits_alone, n_alone)
     recalls = {}
     for ratio in RATIOS:
-        scores, _, _ = _curve(bundle["primary"], bundle["mixtures"], model, thresholds[DRUMS], ratio)
+        scores, _, _ = _curve(bundle["primary"], bundle["mixtures"], model, ratio)
         recalls[str(ratio)] = float(np.mean(_hits(scores, thresholds[DRUMS])))
     return {"name": name, "thresholds": {label: float(value) for label, value in zip(TARGETS, thresholds)},
             "primary_recall": recalls, "paired_plus6": paired, "unmixed": unmixed,
@@ -433,7 +443,7 @@ def _score_head(name, model, thresholds, bundle, h0_hits):
 
 
 def _h0_hits_at_plus6(model, thresholds, bundle):
-    scores, _, _ = _curve(bundle["primary"], bundle["mixtures"], model, thresholds[DRUMS], 6)
+    scores, _, _ = _curve(bundle["primary"], bundle["mixtures"], model, 6)
     return _hits(scores, thresholds[DRUMS])
 
 
@@ -592,18 +602,11 @@ def run(data_root, weights, checkpoint, output_dir, n_boot=N_BOOT, decode=None):
     h2 = h2_reports[str(SEED)]
     provisional = any(h2_reports[str(seed)]["pass"] != h2["pass"] for seed in EXTRA_SEEDS)
     h2_vs_h1 = paired_recall(
-        _hits(_curve(pairs["primary"], mixtures, h1_model, h1_thresholds[DRUMS], 6)[0], h1_thresholds[DRUMS]),
-        _hits(_curve(pairs["primary"], mixtures, h2_model, h2_thresholds[DRUMS], 6)[0], h2_thresholds[DRUMS]),
+        _hits(_curve(pairs["primary"], mixtures, h1_model, 6)[0], h1_thresholds[DRUMS]),
+        _hits(_curve(pairs["primary"], mixtures, h2_model, 6)[0], h2_thresholds[DRUMS]),
         [pair.target for pair in pairs["primary"]], [pair.masker for pair in pairs["primary"]], n_boot)
     h2_beats = bool(h2_vs_h1["delta"]["ci95"][0] > 0)
     code_name = decide(h1_report["pass"], h2["pass"], h2_beats)
-
-    def descriptive(group, model, thresholds):
-        out = {}
-        for ratio in RATIOS:
-            scores, _, _ = _curve(pairs[group], mixtures, model, thresholds[DRUMS], ratio)
-            out[str(ratio)] = float(np.mean(_hits(scores, thresholds[DRUMS])))
-        return out
 
     report = {
         "phase": "1-lite", "created": created, "config_hash": config_hash(), "config": CONFIG,
@@ -612,14 +615,14 @@ def run(data_root, weights, checkpoint, output_dir, n_boot=N_BOOT, decode=None):
         "h0": h0_report, "h1": h1_report,
         "h2": {**h2, "seeds": h2_reports, "provisional": provisional, "versus_h1_plus6": h2_vs_h1, "beats_h1": h2_beats},
         "secondary_primary_recall_plus6": {
-            "H0": descriptive("secondary", h0_model, h0_thresholds)["6"],
-            "H1": descriptive("secondary", h1_model, h1_thresholds)["6"],
-            "H2": descriptive("secondary", h2_model, h2_thresholds)["6"],
+            "H0": _descriptive(pairs["secondary"], mixtures, h0_model, h0_thresholds)["6"],
+            "H1": _descriptive(pairs["secondary"], mixtures, h1_model, h1_thresholds)["6"],
+            "H2": _descriptive(pairs["secondary"], mixtures, h2_model, h2_thresholds)["6"],
         },
         "bass_curve_descriptive": {
-            "H0": descriptive("bass", h0_model, h0_thresholds),
-            "H1": descriptive("bass", h1_model, h1_thresholds),
-            "H2": descriptive("bass", h2_model, h2_thresholds),
+            "H0": _descriptive(pairs["bass"], mixtures, h0_model, h0_thresholds, BASS),
+            "H1": _descriptive(pairs["bass"], mixtures, h1_model, h1_thresholds, BASS),
+            "H2": _descriptive(pairs["bass"], mixtures, h2_model, h2_thresholds, BASS),
         },
         "decision": code_name, "statement": _statement(code_name, provisional),
         "runtime_seconds": time.perf_counter() - started,
