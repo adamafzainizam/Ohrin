@@ -1,0 +1,553 @@
+{
+  "_comment": "Synthetic test data. Not derived from any recording.",
+  "duration_s": 240.0,
+  "passage": {
+    "start_s": 120.0,
+    "end_s": 158.4
+  },
+  "windows": [
+    {
+      "start_s": 120.0,
+      "end_s": 121.0,
+      "rms_dbfs": -22.0,
+      "onset_change": 0.3,
+      "band_fraction": [
+        0.5,
+        0.3,
+        0.2
+      ]
+    },
+    {
+      "start_s": 121.0,
+      "end_s": 122.0,
+      "rms_dbfs": -20.02,
+      "onset_change": 0.321,
+      "band_fraction": [
+        0.5,
+        0.3,
+        0.2
+      ]
+    },
+    {
+      "start_s": 122.0,
+      "end_s": 123.0,
+      "rms_dbfs": -18.16,
+      "onset_change": 0.376,
+      "band_fraction": [
+        0.5,
+        0.3,
+        0.2
+      ]
+    },
+    {
+      "start_s": 123.0,
+      "end_s": 124.0,
+      "rms_dbfs": -16.55,
+      "onset_change": 0.442,
+      "band_fraction": [
+        0.5,
+        0.3,
+        0.2
+      ]
+    },
+    {
+      "start_s": 124.0,
+      "end_s": 125.0,
+      "rms_dbfs": -15.27,
+      "onset_change": 0.489,
+      "band_fraction": [
+        0.5,
+        0.3,
+        0.2
+      ]
+    },
+    {
+      "start_s": 125.0,
+      "end_s": 126.0,
+      "rms_dbfs": -14.41,
+      "onset_change": 0.498,
+      "band_fraction": [
+        0.5,
+        0.3,
+        0.2
+      ]
+    },
+    {
+      "start_s": 126.0,
+      "end_s": 127.0,
+      "rms_dbfs": -14.02,
+      "onset_change": 0.465,
+      "band_fraction": [
+        0.5,
+        0.3,
+        0.2
+      ]
+    },
+    {
+      "start_s": 127.0,
+      "end_s": 128.0,
+      "rms_dbfs": -14.13,
+      "onset_change": 0.405,
+      "band_fraction": [
+        0.5,
+        0.3,
+        0.2
+      ]
+    },
+    {
+      "start_s": 128.0,
+      "end_s": 129.0,
+      "rms_dbfs": -14.73,
+      "onset_change": 0.342,
+      "band_fraction": [
+        0.5,
+        0.3,
+        0.2
+      ]
+    },
+    {
+      "start_s": 129.0,
+      "end_s": 130.0,
+      "rms_dbfs": -15.78,
+      "onset_change": 0.304,
+      "band_fraction": [
+        0.5,
+        0.3,
+        0.2
+      ]
+    },
+    {
+      "start_s": 130.0,
+      "end_s": 131.0,
+      "rms_dbfs": -17.21,
+      "onset_change": 0.307,
+      "band_fraction": [
+        0.5,
+        0.3,
+        0.2
+      ]
+    },
+    {
+      "start_s": 131.0,
+      "end_s": 132.0,
+      "rms_dbfs": -18.95,
+      "onset_change": 0.35,
+      "band_fraction": [
+        0.5,
+        0.3,
+        0.2
+      ]
+    },
+    {
+      "start_s": 132.0,
+      "end_s": 133.0,
+      "rms_dbfs": -20.87,
+      "onset_change": 0.415,
+      "band_fraction": [
+        0.5,
+        0.3,
+        0.2
+      ]
+    },
+    {
+      "start_s": 133.0,
+      "end_s": 134.0,
+      "rms_dbfs": -22.87,
+      "onset_change": 0.473,
+      "band_fraction": [
+        0.5,
+        0.3,
+        0.2
+      ]
+    },
+    {
+      "start_s": 134.0,
+      "end_s": 135.0,
+      "rms_dbfs": -24.81,
+      "onset_change": 0.5,
+      "band_fraction": [
+        0.5,
+        0.3,
+        0.2
+      ]
+    },
+    {
+      "start_s": 135.0,
+      "end_s": 136.0,
+      "rms_dbfs": -26.57,
+      "onset_change": 0.484,
+      "band_fraction": [
+        0.5,
+        0.3,
+        0.2
+      ]
+    },
+    {
+      "start_s": 136.0,
+      "end_s": 137.0,
+      "rms_dbfs": -28.05,
+      "onset_change": 0.432,
+      "band_fraction": [
+        0.5,
+        0.3,
+        0.2
+      ]
+    },
+    {
+      "start_s": 137.0,
+      "end_s": 138.0,
+      "rms_dbfs": -29.16,
+      "onset_change": 0.367,
+      "band_fraction": [
+        0.5,
+        0.3,
+        0.2
+      ]
+    },
+    {
+      "start_s": 138.0,
+      "end_s": 139.0,
+      "rms_dbfs": -29.82,
+      "onset_change": 0.316,
+      "band_fraction": [
+        0.5,
+        0.3,
+        0.2
+      ]
+    },
+    {
+      "start_s": 139.0,
+      "end_s": 140.0,
+      "rms_dbfs": -35.99,
+      "onset_change": 0.301,
+      "band_fraction": [
+        0.4,
+        0.3,
+        0.3
+      ]
+    },
+    {
+      "start_s": 140.0,
+      "end_s": 141.0,
+      "rms_dbfs": -35.67,
+      "onset_change": 0.328,
+      "band_fraction": [
+        0.4,
+        0.3,
+        0.3
+      ]
+    },
+    {
+      "start_s": 141.0,
+      "end_s": 142.0,
+      "rms_dbfs": -34.87,
+      "onset_change": 0.386,
+      "band_fraction": [
+        0.4,
+        0.3,
+        0.3
+      ]
+    },
+    {
+      "start_s": 142.0,
+      "end_s": 143.0,
+      "rms_dbfs": -33.64,
+      "onset_change": 0.451,
+      "band_fraction": [
+        0.4,
+        0.3,
+        0.3
+      ]
+    },
+    {
+      "start_s": 143.0,
+      "end_s": 144.0,
+      "rms_dbfs": -32.07,
+      "onset_change": 0.493,
+      "band_fraction": [
+        0.4,
+        0.3,
+        0.3
+      ]
+    },
+    {
+      "start_s": 144.0,
+      "end_s": 145.0,
+      "rms_dbfs": -30.24,
+      "onset_change": 0.496,
+      "band_fraction": [
+        0.4,
+        0.3,
+        0.3
+      ]
+    },
+    {
+      "start_s": 145.0,
+      "end_s": 146.0,
+      "rms_dbfs": -28.27,
+      "onset_change": 0.457,
+      "band_fraction": [
+        0.4,
+        0.3,
+        0.3
+      ]
+    },
+    {
+      "start_s": 146.0,
+      "end_s": 147.0,
+      "rms_dbfs": -26.28,
+      "onset_change": 0.395,
+      "band_fraction": [
+        0.4,
+        0.3,
+        0.3
+      ]
+    },
+    {
+      "start_s": 147.0,
+      "end_s": 148.0,
+      "rms_dbfs": -24.4,
+      "onset_change": 0.334,
+      "band_fraction": [
+        0.4,
+        0.3,
+        0.3
+      ]
+    },
+    {
+      "start_s": 148.0,
+      "end_s": 149.0,
+      "rms_dbfs": -22.74,
+      "onset_change": 0.302,
+      "band_fraction": [
+        0.4,
+        0.3,
+        0.3
+      ]
+    },
+    {
+      "start_s": 149.0,
+      "end_s": 150.0,
+      "rms_dbfs": -21.42,
+      "onset_change": 0.311,
+      "band_fraction": [
+        0.4,
+        0.3,
+        0.3
+      ]
+    },
+    {
+      "start_s": 150.0,
+      "end_s": 151.0,
+      "rms_dbfs": -20.5,
+      "onset_change": 0.359,
+      "band_fraction": [
+        0.4,
+        0.3,
+        0.3
+      ]
+    },
+    {
+      "start_s": 151.0,
+      "end_s": 152.0,
+      "rms_dbfs": -20.04,
+      "onset_change": 0.424,
+      "band_fraction": [
+        0.4,
+        0.3,
+        0.3
+      ]
+    },
+    {
+      "start_s": 152.0,
+      "end_s": 153.0,
+      "rms_dbfs": -20.09,
+      "onset_change": 0.479,
+      "band_fraction": [
+        0.4,
+        0.3,
+        0.3
+      ]
+    },
+    {
+      "start_s": 153.0,
+      "end_s": 154.0,
+      "rms_dbfs": -20.62,
+      "onset_change": 0.5,
+      "band_fraction": [
+        0.4,
+        0.3,
+        0.3
+      ]
+    },
+    {
+      "start_s": 154.0,
+      "end_s": 155.0,
+      "rms_dbfs": -21.61,
+      "onset_change": 0.478,
+      "band_fraction": [
+        0.4,
+        0.3,
+        0.3
+      ]
+    },
+    {
+      "start_s": 155.0,
+      "end_s": 156.0,
+      "rms_dbfs": -23.0,
+      "onset_change": 0.423,
+      "band_fraction": [
+        0.4,
+        0.3,
+        0.3
+      ]
+    },
+    {
+      "start_s": 156.0,
+      "end_s": 157.0,
+      "rms_dbfs": -24.7,
+      "onset_change": 0.358,
+      "band_fraction": [
+        0.4,
+        0.3,
+        0.3
+      ]
+    },
+    {
+      "start_s": 157.0,
+      "end_s": 158.0,
+      "rms_dbfs": -26.61,
+      "onset_change": 0.311,
+      "band_fraction": [
+        0.4,
+        0.3,
+        0.3
+      ]
+    }
+  ],
+  "tempo_candidates": [
+    {
+      "bpm": 96.0,
+      "periodicity": 0.52
+    },
+    {
+      "bpm": 48.0,
+      "periodicity": 0.31
+    }
+  ],
+  "candidate_chords": [
+    {
+      "name": "Em",
+      "suggested_standard_tuning_frets": [
+        0,
+        2,
+        2,
+        0,
+        0,
+        0
+      ],
+      "score": 0.91
+    },
+    {
+      "name": "C",
+      "suggested_standard_tuning_frets": [
+        -1,
+        3,
+        2,
+        0,
+        1,
+        0
+      ],
+      "score": 0.78
+    },
+    {
+      "name": "Am",
+      "suggested_standard_tuning_frets": [
+        -1,
+        0,
+        2,
+        2,
+        1,
+        0
+      ],
+      "score": 0.64
+    }
+  ],
+  "instruments": {
+    "available": true,
+    "model": "synthetic-fixture",
+    "caveat": "Synthetic fixture values for interface testing only. They are not model output.",
+    "classes": [
+      {
+        "name": "guitar",
+        "probability": 0.637,
+        "threshold": 0.45,
+        "above_threshold": true
+      },
+      {
+        "name": "bass",
+        "probability": 0.56,
+        "threshold": 0.4,
+        "above_threshold": true
+      },
+      {
+        "name": "drums",
+        "probability": 0.445,
+        "threshold": 0.5,
+        "above_threshold": false
+      },
+      {
+        "name": "voice",
+        "probability": 0.34,
+        "threshold": 0.35,
+        "above_threshold": false
+      }
+    ],
+    "segments": [
+      {
+        "start_s": 120.0,
+        "end_s": 129.6,
+        "probabilities": {
+          "guitar": 0.82,
+          "bass": 0.35,
+          "drums": 0.12,
+          "voice": 0.08
+        }
+      },
+      {
+        "start_s": 129.6,
+        "end_s": 139.2,
+        "probabilities": {
+          "guitar": 0.74,
+          "bass": 0.52,
+          "drums": 0.31,
+          "voice": 0.15
+        }
+      },
+      {
+        "start_s": 139.2,
+        "end_s": 148.8,
+        "probabilities": {
+          "guitar": 0.61,
+          "bass": 0.66,
+          "drums": 0.58,
+          "voice": 0.44
+        }
+      },
+      {
+        "start_s": 148.8,
+        "end_s": 158.4,
+        "probabilities": {
+          "guitar": 0.38,
+          "bass": 0.71,
+          "drums": 0.77,
+          "voice": 0.69
+        }
+      }
+    ]
+  },
+  "limitations": [
+    "Synthetic test data. Not derived from any recording.",
+    "Instrument candidates are uncertain model outputs, not confirmed parts."
+  ]
+}

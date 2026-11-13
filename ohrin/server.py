@@ -1,7 +1,6 @@
 """Local-only HTTP entry point for the Ohrin passage workbench."""
 
 import json
-import mimetypes
 import os
 from pathlib import Path
 import tempfile
@@ -14,7 +13,16 @@ from .instrument_inference import predict_or_unavailable
 
 WEB = Path(__file__).resolve().parent.parent / "web"
 MAX_UPLOAD = 50 * 1024 * 1024
-FILES = {"/": "index.html", "/style.css": "style.css", "/app.js": "app.js", "/state.mjs": "state.mjs", "/eq.mjs": "eq.mjs", "/eq-ui.js": "eq-ui.js"}
+FILES = {"/": "index.html", "/style.css": "style.css", "/app.js": "app.js", "/state.mjs": "state.mjs", "/eq.mjs": "eq.mjs", "/eq-ui.js": "eq-ui.js", "/timeline.mjs": "timeline.mjs", "/lanes-model.mjs": "lanes-model.mjs", "/peaks.mjs": "peaks.mjs", "/input-rules.mjs": "input-rules.mjs", "/store.mjs": "store.mjs", "/transport.js": "transport.js", "/inspector.js": "inspector.js",
+         "/lanes/overview.js": "lanes/overview.js",
+         "/lanes/ruler.js": "lanes/ruler.js",
+         "/lanes/waveform.js": "lanes/waveform.js",
+         "/lanes/energy.js": "lanes/energy.js",
+         "/lanes/instruments.js": "lanes/instruments.js",
+         "/lanes/playhead.js": "lanes/playhead.js",
+         "/tokens.css": "tokens.css", "/theme.mjs": "theme.mjs",
+         "/fonts/Geist-Variable.woff2": "fonts/Geist-Variable.woff2",
+         "/fonts/GeistMono-Variable.woff2": "fonts/GeistMono-Variable.woff2"}
 
 
 def analyze_upload(data: bytes, start: float, end: float) -> dict:
@@ -32,6 +40,21 @@ def analyze_upload(data: bytes, start: float, end: float) -> dict:
             result["limitations"] = [t for t in result["limitations"] if not t.startswith("Instrument identity")]
             result["limitations"].append("Instrument candidates are uncertain model outputs, not confirmed parts.")
         return result
+
+
+CONTENT_TYPES = {
+    ".html": "text/html; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".mjs": "text/javascript; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".svg": "image/svg+xml; charset=utf-8",
+    ".woff2": "font/woff2",
+}
+
+
+def content_type_for(path: str) -> str:
+    return CONTENT_TYPES.get(Path(path).suffix.lower(), "application/octet-stream")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -53,9 +76,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404)
             return
         data = (WEB / FILES[path]).read_bytes()
-        content_type = "text/javascript" if path.endswith((".js", ".mjs")) else mimetypes.guess_type(FILES[path])[0]
         self.send_response(200)
-        self.send_header("Content-Type", f"{content_type or 'text/plain'}; charset=utf-8")
+        self.send_header("Content-Type", content_type_for(FILES[path]))
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()

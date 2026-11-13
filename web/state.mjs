@@ -6,6 +6,13 @@ export function clampSelection(a, b, duration) {
   return { start: Math.min(x, y), end: Math.max(x, y) };
 }
 
+// Apply an edit to one bound of the selection, keeping the other at its stored value.
+export function selectionFromField(selection, field, value, duration) {
+  return field === 'start'
+    ? clampSelection(value, selection.end, duration)
+    : clampSelection(selection.start, value, duration);
+}
+
 export function shouldLoop(time, selection, enabled) {
   return Boolean(enabled && selection.end > selection.start && time >= selection.end);
 }

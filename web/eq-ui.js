@@ -3,6 +3,7 @@ import {
   freqToX, xToFreq, dbToY, yToDb, curveDb, webAudioStages, levelMatchDb, soloParams,
   nudgeBand, describeBand, eqNoteBlock, parseEqFromNote, shaperCurve, SOFT_KNEE, SHAPER_SPAN,
 } from './eq.mjs';
+import { getPalette, onInvalidate, observeCanvasHost, CANVAS_FONT } from './theme.mjs';
 
 const IMPORT_LIMIT_BYTES = 256 * 1024;
 const MESSAGE_HOLD_MS = 6000;
@@ -210,24 +211,26 @@ export function initEq({ player, announce, fitCanvas }) {
   }
 
   function drawGrid(ctx, w, h) {
+    const p = getPalette();
+    ctx.font = CANVAS_FONT;
     for (const db of [-24, -12, 0, 12, 24]) {
       const y = dbToY(db) * h;
-      ctx.strokeStyle = '#304044';
+      ctx.strokeStyle = p.grid;
       ctx.beginPath();
       ctx.moveTo(0, y);
       ctx.lineTo(w, y);
       ctx.stroke();
-      ctx.fillStyle = '#839b94';
+      ctx.fillStyle = p.textMuted;
       ctx.fillText(`${db} dB`, 4, Math.max(10, y - 3));
     }
     for (const f of [20, 100, 1000, 10000]) {
       const x = freqToX(f, sr()) * w;
-      ctx.strokeStyle = '#304044';
+      ctx.strokeStyle = p.grid;
       ctx.beginPath();
       ctx.moveTo(x, 0);
       ctx.lineTo(x, h);
       ctx.stroke();
-      ctx.fillStyle = '#839b94';
+      ctx.fillStyle = p.textMuted;
       ctx.fillText(f >= 1000 ? `${f / 1000}k Hz` : `${f} Hz`, x + 3, h - 5);
     }
   }
@@ -242,7 +245,7 @@ export function initEq({ player, announce, fitCanvas }) {
       const y = h * (1 - Math.max(0, Math.min(1, (data[bin] + 100) / 100)));
       if (i === 0) ctx.moveTo(0, y); else ctx.lineTo(i / 255 * w, y);
     }
-    ctx.strokeStyle = '#587e72';
+    ctx.strokeStyle = getPalette().wave;
     ctx.stroke();
   }
 
@@ -250,8 +253,9 @@ export function initEq({ player, announce, fitCanvas }) {
     if (panel.hidden) return;
     const canvas = $('eqCanvas');
     const ratio = window.devicePixelRatio || 1;
-    const w = Math.max(1, canvas.clientWidth);
-    const h = Math.max(1, canvas.clientHeight);
+    const box = canvas.getBoundingClientRect();
+    const w = Math.max(1, box.width);
+    const h = Math.max(1, box.height);
     if (canvas.width !== Math.round(w * ratio) || canvas.height !== Math.round(h * ratio)) {
       canvas.width = Math.round(w * ratio);
       canvas.height = Math.round(h * ratio);
@@ -268,7 +272,7 @@ export function initEq({ player, announce, fitCanvas }) {
       const y = dbToY(v) * h;
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     });
-    ctx.strokeStyle = '#9fe4ca';
+    ctx.strokeStyle = getPalette().accent;
     ctx.lineWidth = 2;
     ctx.stroke();
     $('eqWarning').textContent = peakGainDb > 9 ? 'Large boosts can be loud. Lower your volume before playing.' : '';
@@ -599,7 +603,8 @@ export function initEq({ player, announce, fitCanvas }) {
 
   for (const event of ['play', 'pause', 'ended']) player.addEventListener(event, monitoring);
   document.addEventListener('visibilitychange', monitoring);
-  window.addEventListener('resize', draw);
+  observeCanvasHost($('eqCanvas'));
+  onInvalidate(draw);
   const Context = window.AudioContext || window.webkitAudioContext;
   if (!Context || !Context.prototype.createMediaElementSource) {
     unavailable = true;

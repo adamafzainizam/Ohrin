@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from ohrin.server import WEB, FILES, Handler, analyze_upload
+from ohrin.server import WEB, FILES, Handler, analyze_upload, content_type_for
 from tests.test_analysis import write_tone
 
 
@@ -11,7 +11,21 @@ class ServerBoundaryTests(unittest.TestCase):
     def test_browser_ui_is_available_to_serve(self):
         page = (WEB / "index.html").read_text()
         self.assertIn("Ohrin", page)
-        self.assertIn("Select a passage", page)
+        self.assertIn("Open an audio file", page)
+
+    def test_every_files_entry_exists(self):
+        for path, name in FILES.items():
+            self.assertTrue((WEB / name).is_file(), f"{path} -> {name}")
+
+    def test_content_types(self):
+        js = "text/javascript; charset=utf-8"
+        self.assertEqual(content_type_for("a.js"), js)
+        self.assertEqual(content_type_for("a.mjs"), js)
+        self.assertEqual(content_type_for("a.css"), "text/css; charset=utf-8")
+        self.assertEqual(content_type_for("a.html"), "text/html; charset=utf-8")
+        self.assertEqual(content_type_for("a.json"), "application/json; charset=utf-8")
+        self.assertEqual(content_type_for("a.svg"), "image/svg+xml; charset=utf-8")
+        self.assertEqual(content_type_for("a.woff2"), "font/woff2")
 
     def test_eq_static_routes(self):
         import io

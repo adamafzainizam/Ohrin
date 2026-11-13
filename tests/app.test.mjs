@@ -1,4 +1,12 @@
+import './contracts.test.mjs';
 import './eq.test.mjs';
+import './fixture.test.mjs';
+import './peaks.test.mjs';
+import './input-rules.test.mjs';
+import './timeline.test.mjs';
+import './store.test.mjs';
+import './transport.test.mjs';
+import './theme.test.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -320,4 +328,14 @@ test('EQ note exports settings only and adds limitation only for nonflat bands',
   assert.equal(shaped.limitations.length,flat.limitations.length+1);
   const walk=o=>{for(const [key,value] of Object.entries(o||{})){assert.ok(!['audio','samples','spectrum','solo'].includes(key));if(value&&typeof value==='object')walk(value);}};
   walk(shaped);assert.equal(shaped.eq.bands[1].gain_db,6);
+});
+import './lanes-model.test.mjs';
+import './instruments-lane.test.mjs';
+
+test('editing one field keeps the other bound exact, and swaps when start passes end', async () => {
+  const { selectionFromField } = await import('../web/state.mjs');
+  const sel = { start: 38.04, end: 44.06 };
+  assert.deepEqual(selectionFromField(sel, 'start', 40, 100), { start: 40, end: 44.06 });
+  assert.deepEqual(selectionFromField(sel, 'end', 50, 100), { start: 38.04, end: 50 });
+  assert.deepEqual(selectionFromField(sel, 'start', 60, 100), { start: 44.06, end: 60 });
 });

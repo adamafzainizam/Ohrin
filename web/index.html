@@ -3,91 +3,118 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#111719">
-  <title>Ohrin: hear the structure</title>
+  <meta name="theme-color" content="#141517">
+  <title>Ohrin</title>
+  <script>try{var t=localStorage.getItem("ohrin.theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}</script>
+  <link rel="stylesheet" href="/tokens.css">
   <link rel="stylesheet" href="/style.css">
   <script type="module" src="/app.js"></script>
 </head>
 <body>
-  <div class="shell">
-    <header class="topbar">
-      <a class="brand" href="/" aria-label="Ohrin home"><span class="brand-mark">◖◗</span> Ohrin<span class="brand-dot">.</span></a>
-      <span class="eyebrow">A passage workbench for curious ears</span>
-      <span class="private-pill">● Local session</span>
-    </header>
-
-    <main>
-      <section class="hero">
-        <div>
-          <p class="kicker">LISTEN CLOSER / PLAY IT YOUR WAY</p>
-          <h1>Hear the <em>structure</em><br>inside a passage.</h1>
-          <p class="intro">Loop a moment, slow it down, and inspect measured changes alongside playable ideas. Every estimate stays open to your ears.</p>
-        </div>
-        <label class="upload" id="dropZone">
-          <input type="file" id="audioFile" accept="audio/*,.mp3,.wav,.flac,.ogg,.m4a">
-          <span class="upload-icon">↥</span>
-          <strong>Choose an audio file</strong>
-          <small>or drop one here · stays on this machine</small>
-        </label>
-      </section>
-
-      <section class="workbench" id="workbench" aria-label="Passage workbench">
-        <div class="section-head">
-          <div><p class="kicker">01 / LISTEN</p><h2>Select a passage</h2></div>
-          <p id="fileName" class="filename">No track loaded</p>
-        </div>
-        <div class="wave-wrap">
-          <canvas id="waveform" height="180" aria-label="Audio waveform. Drag to select a passage."></canvas>
-          <div class="wave-caption"><span>Drag across the waveform to select</span><span id="durationLabel">00:00</span></div>
-        </div>
-        <audio id="player" preload="metadata"></audio>
-        <div class="transport">
-          <button id="playButton" class="play-button" type="button" disabled aria-label="Play or pause">▶</button>
-          <span id="timeLabel" class="time">00:00</span>
-          <div class="transport-spacer"></div>
-          <label class="compact-control">Start <input id="startTime" type="number" min="0" step="0.1" value="0" disabled> s</label>
-          <label class="compact-control">End <input id="endTime" type="number" min="0" step="0.1" value="0" disabled> s</label>
+  <!-- The inline SVG icons in this page are Phosphor icons (MIT). See web/icons/LICENSE. -->
+  <header id="topBar" class="topbar">
+    <h1 class="brand">Ohrin</h1>
+    <div class="tb-file">
+      <button id="openButton" class="tool-button" type="button"><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M245,110.64A16,16,0,0,0,232,104H216V88a16,16,0,0,0-16-16H130.67L102.94,51.2a16.14,16.14,0,0,0-9.6-3.2H40A16,16,0,0,0,24,64V208h0a8,8,0,0,0,8,8H211.1a8,8,0,0,0,7.59-5.47l28.49-85.47A16.05,16.05,0,0,0,245,110.64ZM93.34,64,123.2,86.4A8,8,0,0,0,128,88h72v16H69.77a16,16,0,0,0-15.18,10.94L40,158.7V64Zm112,136H43.1l26.67-80H232Z"/></svg><span>Open</span></button>
+      <span id="fileName" class="filename">No audio loaded</span>
+      <input type="file" id="audioFile" class="visually-hidden" tabindex="-1" accept="audio/*,.mp3,.wav,.flac,.ogg,.m4a">
+    </div>
+    <div class="tb-play">
+      <button id="playButton" class="play-button" type="button" disabled aria-label="Play or pause"><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M232.4,114.49,88.32,26.35a16,16,0,0,0-16.2-.3A15.86,15.86,0,0,0,64,39.87V216.13A15.94,15.94,0,0,0,80,232a16.07,16.07,0,0,0,8.36-2.35L232.4,141.51a15.81,15.81,0,0,0,0-27ZM80,215.94V40l143.83,88Z"/></svg></button>
+      <span id="timeReadout" class="time">00:00.0 / 00:00.0</span>
+      <label class="check-control"><input id="loop" type="checkbox" checked disabled> Loop</label>
+    </div>
+    <div id="toolSlot" class="tb-tools-slot"></div>
+    <details id="moreMenu" class="more">
+      <summary>More</summary>
+      <div id="moreBody" class="more-body">
+        <div id="toolGroup" class="tool-group">
           <label class="compact-control">Speed <select id="speed" disabled><option value="1">1×</option><option value="0.75">0.75×</option><option value="0.5">0.5×</option><option value="0.25">0.25×</option></select></label>
-          <label class="check-control"><input id="loop" type="checkbox" checked disabled> Loop</label>
+          <button id="eqDisclosure" class="tool-button" type="button" aria-expanded="false" aria-controls="eqPanel" disabled><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M40,88H73a32,32,0,0,0,62,0h81a8,8,0,0,0,0-16H135a32,32,0,0,0-62,0H40a8,8,0,0,0,0,16Zm64-24A16,16,0,1,1,88,80,16,16,0,0,1,104,64ZM216,168H199a32,32,0,0,0-62,0H40a8,8,0,0,0,0,16h97a32,32,0,0,0,62,0h17a8,8,0,0,0,0-16Zm-48,24a16,16,0,1,1,16-16A16,16,0,0,1,168,192Z"/></svg><span>EQ</span></button>
+          <span class="export-group"><button id="exportButton" class="tool-button" type="button" disabled aria-describedby="exportReason"><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,112v96a16,16,0,0,1-16,16H56a16,16,0,0,1-16-16V112A16,16,0,0,1,56,96H80a8,8,0,0,1,0,16H56v96H200V112H176a8,8,0,0,1,0-16h24A16,16,0,0,1,216,112ZM93.66,69.66,120,43.31V136a8,8,0,0,0,16,0V43.31l26.34,26.35a8,8,0,0,0,11.32-11.32l-40-40a8,8,0,0,0-11.32,0l-40,40A8,8,0,0,0,93.66,69.66Z"/></svg><span>Export</span></button><span id="exportReason" class="export-reason">Analyse a passage first</span></span>
+          <div class="theme-control" role="radiogroup" aria-label="Theme"><button type="button" role="radio" aria-checked="false" data-theme-choice="system" title="System"><span class="visually-hidden">System</span><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M208,40H48A24,24,0,0,0,24,64V176a24,24,0,0,0,24,24h72v16H96a8,8,0,0,0,0,16h64a8,8,0,0,0,0-16H136V200h72a24,24,0,0,0,24-24V64A24,24,0,0,0,208,40ZM48,56H208a8,8,0,0,1,8,8v80H40V64A8,8,0,0,1,48,56ZM208,184H48a8,8,0,0,1-8-8V160H216v16A8,8,0,0,1,208,184Z"/></svg></button><button type="button" role="radio" aria-checked="false" data-theme-choice="light" title="Light"><span class="visually-hidden">Light</span><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M120,40V16a8,8,0,0,1,16,0V40a8,8,0,0,1-16,0Zm72,88a64,64,0,1,1-64-64A64.07,64.07,0,0,1,192,128Zm-16,0a48,48,0,1,0-48,48A48.05,48.05,0,0,0,176,128ZM58.34,69.66A8,8,0,0,0,69.66,58.34l-16-16A8,8,0,0,0,42.34,53.66Zm0,116.68-16,16a8,8,0,0,0,11.32,11.32l16-16a8,8,0,0,0-11.32-11.32ZM192,72a8,8,0,0,0,5.66-2.34l16-16a8,8,0,0,0-11.32-11.32l-16,16A8,8,0,0,0,192,72Zm5.66,114.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32-11.32ZM48,128a8,8,0,0,0-8-8H16a8,8,0,0,0,0,16H40A8,8,0,0,0,48,128Zm80,80a8,8,0,0,0-8,8v24a8,8,0,0,0,16,0V216A8,8,0,0,0,128,208Zm112-88H216a8,8,0,0,0,0,16h24a8,8,0,0,0,0-16Z"/></svg></button><button type="button" role="radio" aria-checked="false" data-theme-choice="dark" title="Dark"><span class="visually-hidden">Dark</span><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M233.54,142.23a8,8,0,0,0-8-2,88.08,88.08,0,0,1-109.8-109.8,8,8,0,0,0-10-10,104.84,104.84,0,0,0-52.91,37A104,104,0,0,0,136,224a103.09,103.09,0,0,0,62.52-20.88,104.84,104.84,0,0,0,37-52.91A8,8,0,0,0,233.54,142.23ZM188.9,190.34A88,88,0,0,1,65.66,67.11a89,89,0,0,1,31.4-26A106,106,0,0,0,96,56,104.11,104.11,0,0,0,200,160a106,106,0,0,0,14.92-1.06A89,89,0,0,1,188.9,190.34Z"/></svg></button></div>
         </div>
-        <button id="eqDisclosure" type="button" aria-expanded="false" aria-controls="eqPanel" disabled>Listening EQ</button>
-        <section id="eqPanel" class="eq-panel" aria-label="Listening EQ" hidden></section>
-        <div class="action-row">
-          <p id="selectionLabel">Load audio to begin.</p>
-          <button id="analyzeButton" class="primary-button" type="button" disabled>Analyse passage <span>↗</span></button>
-        </div>
-      </section>
-
-      <p id="liveStatus" class="visually-hidden" role="status" aria-live="polite"></p>
-      <section class="results" id="results" hidden>
-        <div class="section-head"><div><p class="kicker">02 / NOTICE</p><h2>What changes?</h2></div><span class="tag">Measured from the mix</span></div>
-        <div class="energy-card"><div class="card-top"><strong>Energy &amp; texture</strong><span>One-second windows · RMS level</span></div><canvas id="energyChart" height="190" aria-label="Measured audio level over the passage"></canvas><p id="energyCaption" class="subtle"></p>
-          <div id="instrumentTimeline" class="timeline" hidden>
-            <div class="card-top"><strong>Instrument scores over time</strong><span class="tag">Model output · uncertain</span></div>
-            <div id="timelineRows" class="timeline-rows"></div>
-            <div id="blockStrip" class="block-strip" role="group" aria-label="Blocks. Arrow keys move between blocks; Enter selects one to mark."></div>
-            <div class="visually-hidden"><table id="timelineTable"><caption>Instrument model scores per segment (uncertain model output)</caption><thead></thead><tbody></tbody></table></div>
-            <p id="timelineCaption" class="subtle"></p>
-            <div id="segmentReview" class="segment-review" role="region" aria-label="Block review" hidden></div>
+      </div>
+    </details>
+  </header>
+  <section id="eqPanel" class="eq-panel" aria-label="Listening EQ" hidden></section>
+  <main id="workbench" class="workbench">
+    <div id="laneArea" class="lane-area">
+      <div id="emptyState" class="empty-state">
+        <p class="empty-title">Open an audio file, or drop one anywhere.</p>
+        <p class="subtle">Audio stays on this machine.</p>
+        <button id="emptyOpen" class="tool-button" type="button"><svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M245,110.64A16,16,0,0,0,232,104H216V88a16,16,0,0,0-16-16H130.67L102.94,51.2a16.14,16.14,0,0,0-9.6-3.2H40A16,16,0,0,0,24,64V208h0a8,8,0,0,0,8,8H211.1a8,8,0,0,0,7.59-5.47l28.49-85.47A16.05,16.05,0,0,0,245,110.64ZM93.34,64,123.2,86.4A8,8,0,0,0,128,88h72v16H69.77a16,16,0,0,0-15.18,10.94L40,158.7V64Zm112,136H43.1l26.67-80H232Z"/></svg><span>Open an audio file</span></button>
+      </div>
+      <div id="overviewWrap" class="lane-row overview-row" hidden><div class="lane-label">Track</div><div id="overview" class="overview lane-plot"><canvas aria-label="Whole track overview"></canvas><div class="overview-view" aria-hidden="true"></div></div></div>
+      <audio id="player" preload="metadata"></audio>
+      <div id="selectionBar" class="selection-bar">
+        <label class="compact-control">Start <input id="startTime" type="number" min="0" step="0.1" value="0" disabled> s</label>
+        <label class="compact-control">End <input id="endTime" type="number" min="0" step="0.1" value="0" disabled> s</label>
+        <p id="selectionLabel" class="selection-label">No audio loaded.</p>
+        <button id="analyzeButton" class="primary-button" type="button" disabled>Analyse passage</button>
+      </div>
+      <p id="staleBanner" class="stale-banner" hidden></p>
+      <div id="waveWrap" class="wave-wrap" hidden>
+        <div id="laneStack" class="lane-stack" tabindex="0" role="group" aria-label="Time aligned audio lanes" aria-keyshortcuts="+ = -">
+          <div class="lane-row ruler-row"><div class="lane-label">Time</div><div class="ruler-content"><div class="zoom-controls" role="group" aria-label="Timeline view"><button id="zoomOut" type="button" aria-label="Zoom out" disabled>−</button><button id="zoomIn" type="button" aria-label="Zoom in" disabled>+</button><button id="fitPassage" type="button" aria-label="Fit passage" disabled>Passage</button><button id="fitTrack" type="button" aria-label="Fit track" disabled>Track</button></div><canvas id="ruler" class="lane-plot" aria-label="Track time ruler"></canvas></div></div>
+          <div class="lane-row"><div class="lane-label">Waveform</div><canvas id="waveform" class="lane-plot" height="120" aria-label="Audio waveform. Drag to select a passage."></canvas></div>
+          <div class="lane-row"><div class="lane-label">Measured</div><canvas id="energyChart" class="lane-plot" height="64" aria-label="Measured RMS audio level on the track time axis"></canvas></div>
+          <div id="instrumentTimeline" class="instrument-lanes" hidden>
+            <p class="lane-provenance">Model output, uncertain</p><div id="timelineRows"></div>
           </div>
+          <div class="playhead-axis"><div id="playhead" class="playhead" aria-hidden="true" hidden></div></div>
         </div>
-        <div class="result-grid">
-          <article class="panel"><span class="panel-number">01</span><h3>Measured changes</h3><ul id="observations"></ul><p class="subtle">Level, onset change, and frequency balance come from the mixed signal. They do not identify instruments.</p></article>
-          <article class="panel"><span class="panel-number">02</span><h3>Pulse candidates</h3><div id="tempoCandidates" class="candidate-list"></div><p class="subtle">Autocorrelation can lock onto half-time or subdivisions. Tap and listen before trusting a beat grid.</p></article>
+        <div class="wave-caption"><span>Drag across the waveform to select. With the lanes focused, + and - zoom.</span><span id="durationLabel">00:00</span></div>
+        <p id="energyCaption" class="subtle">RMS dBFS from the mixed recording. Higher means louder; this is not an instrument stem.</p>
+        <div id="blockStrip" class="block-strip" role="group" aria-label="Blocks. Arrow keys move between blocks; Enter selects one to mark."></div>
+        <div class="visually-hidden"><table id="timelineTable"><caption>Instrument model scores per segment (uncertain model output)</caption><thead></thead><tbody></tbody></table></div>
+        <p id="timelineCaption" class="subtle"></p>
+      </div>
+    </div>
+    <aside id="inspector" class="inspector" aria-label="Inspector">
+      <p id="liveStatus" class="visually-hidden" role="status" aria-live="polite"></p>
+      <section class="results" id="results" aria-label="Results">
+        <h2>Inspector</h2>
+        <div class="inspector-tabs" role="tablist" aria-label="Inspector findings">
+          <button id="tab-measured" type="button" role="tab" aria-controls="panel-measured" aria-selected="true" tabindex="0">Measured</button>
+          <button id="tab-pulse" type="button" role="tab" aria-controls="panel-pulse" aria-selected="false" tabindex="-1">Pulse</button>
+          <button id="tab-instruments" type="button" role="tab" aria-controls="panel-instruments" aria-selected="false" tabindex="-1">Instruments</button>
+          <button id="tab-guitar" type="button" role="tab" aria-controls="panel-guitar" aria-selected="false" tabindex="-1">Guitar</button>
+          <button id="tab-arrange" type="button" role="tab" aria-controls="panel-arrange" aria-selected="false" tabindex="-1">Arrange</button>
+          <button id="tab-notes" type="button" role="tab" aria-controls="panel-notes" aria-selected="false" tabindex="-1">Notes</button>
         </div>
-        <div class="result-grid">
-          <article class="panel"><span class="panel-number">MODEL OUTPUT</span><h3>Instrument candidates</h3><div id="instrumentCandidates" class="candidate-list"></div><p id="instrumentCaveat" class="subtle"></p>
-            <div id="reviewWrap" hidden><p id="reviewTally" class="review-tally"></p><p class="subtle">Your marks are your own listening judgement. They stay in this tab, are not sent anywhere, and are not used to train or score the model. Reloading clears them. Export the note to keep them.</p></div></article>
-        </div>
-        <div class="section-head next-head"><div><p class="kicker">03 / TRY</p><h2>Turn hearing into action</h2></div><span class="tag tag-amber">Ideas, not detections</span></div>
-        <div class="result-grid">
-          <article class="panel"><span class="panel-number">FOR GUITARISTS</span><h3>Harmonic sketches</h3><p class="subtle">Experimental pitch-class matches from a full mix. Fret shapes are playable standard-tuning suggestions, not a transcription.</p><div id="chordCandidates" class="chord-list"></div><label class="note-label">My chord correction <input id="chordCorrection" type="text" placeholder="What do you hear instead?"></label></article>
-          <article class="panel"><span class="panel-number">FOR PRODUCERS</span><h3>Arrange the contrast</h3><p id="creativeIdea" class="idea"></p><label class="note-label">My arrangement notes <textarea id="arrangementNotes" rows="4" placeholder="Which layer changes here? What would you try?"></textarea></label></article>
-        </div>
-        <div class="export-row"><p>Keep the passage, findings, your corrections and listening marks together. Audio is excluded.</p><button id="exportButton" class="secondary-button" type="button">Export private note ↓</button></div>
+        <section id="panel-measured" class="inspector-panel" role="tabpanel" aria-labelledby="tab-measured" tabindex="0">
+          <p class="passage-scope">For the whole passage</p>
+          <p class="inspector-empty">Measured observations will appear after you analyse a passage.</p>
+          <div class="inspector-content" hidden><h3>Measured changes</h3><ul id="observations"></ul><p class="subtle">Level, onset change, and frequency balance come from the mixed signal. They do not identify instruments.</p></div>
+        </section>
+        <section id="panel-pulse" class="inspector-panel" role="tabpanel" aria-labelledby="tab-pulse" tabindex="0" hidden>
+          <p class="passage-scope">For the whole passage</p>
+          <p class="inspector-empty">Tentative pulse candidates will appear after analysis.</p>
+          <div class="inspector-content" hidden><h3>Pulse candidates</h3><div id="tempoCandidates" class="candidate-list"></div><p class="subtle">Autocorrelation can lock onto half-time or subdivisions. Tap and listen before trusting a beat grid.</p></div>
+        </section>
+        <section id="panel-instruments" class="inspector-panel" role="tabpanel" aria-labelledby="tab-instruments" tabindex="0" hidden>
+          <p class="inspector-empty">Uncertain instrument candidates and block marking controls will appear after analysis.</p>
+          <div class="inspector-content" hidden><h3>Instrument candidates</h3><p class="provenance-label">Model output, uncertain</p><div id="segmentReview" class="segment-review" role="region" aria-label="Block review" hidden></div><div id="instrumentCandidates" class="candidate-list"></div><p id="instrumentCaveat" class="subtle"></p></div>
+        </section>
+        <section id="panel-guitar" class="inspector-panel" role="tabpanel" aria-labelledby="tab-guitar" tabindex="0" hidden>
+          <p class="passage-scope">For the whole passage</p>
+          <p class="inspector-empty">Harmonic ideas will appear after analysis.</p>
+          <div class="inspector-content" hidden><h3>Harmonic sketches</h3><p class="idea-label">Idea, not a detection</p><p class="subtle">Experimental pitch-class matches from a full mix. Fret shapes are playable standard-tuning suggestions, not a transcription.</p><div id="chordCandidates" class="chord-list"></div></div>
+          <label class="note-label">My chord correction <input id="chordCorrection" type="text" placeholder="What do you hear instead?"></label>
+        </section>
+        <section id="panel-arrange" class="inspector-panel" role="tabpanel" aria-labelledby="tab-arrange" tabindex="0" hidden>
+          <p class="passage-scope">For the whole passage</p>
+          <p class="inspector-empty">A creative arrangement idea will appear after analysis.</p>
+          <div class="inspector-content" hidden><h3>Arrange the contrast</h3><p class="idea-label">Idea, not a detection</p><p id="creativeIdea" class="idea"></p></div>
+          <label class="note-label">My arrangement notes <textarea id="arrangementNotes" rows="4" placeholder="Which layer changes here? What would you try?"></textarea></label>
+        </section>
+        <section id="panel-notes" class="inspector-panel" role="tabpanel" aria-labelledby="tab-notes" tabindex="0" hidden>
+          <p class="inspector-empty">Analyse a passage to export its findings with your notes and listening marks.</p>
+          <div class="inspector-content" hidden><h3>Listening notes</h3><p id="reviewTally" class="review-tally" hidden></p><p id="reviewCaveat" class="subtle" hidden>Your marks are your own listening judgement. They stay in this tab, are not sent anywhere, and are not used to train or score the model. Reloading clears them. Export the note to keep them.</p><p class="subtle export-note">Export keeps the analysed passage, findings, corrections, listening marks and EQ settings together. Audio is excluded.</p></div>
+        </section>
       </section>
-      <footer><span>Ohrin / listen, test, correct</span><span>Analysis stays on localhost. Uploaded audio is discarded after each request.</span></footer>
-    </main>
-  </div>
+    </aside>
+  </main>
 </body>
 </html>
