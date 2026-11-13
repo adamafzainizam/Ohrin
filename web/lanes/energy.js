@@ -1,3 +1,4 @@
+import { sizeCanvas } from '../lanes-model.mjs';
 import { timeToX } from '../timeline.mjs';
 import { lanesFromAnalysis } from '../lanes-model.mjs';
 import { CANVAS_FONT } from '../theme.mjs';
@@ -7,7 +8,7 @@ export function createEnergyLane() {
   function draw() {
     if (!args) return;
     const { state, view, widthPx: w, palette: p } = args, h = 64, ratio = window.devicePixelRatio || 1;
-    el.width = Math.round(w * ratio); el.height = h * ratio;
+    sizeCanvas(el, w, h, ratio);
     const ctx = el.getContext('2d'); ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, w, h); ctx.font = CANVAS_FONT;
     if (state.analysing) { ctx.fillStyle = p.surface2; ctx.fillRect(0, 8, w, h - 16); return; }

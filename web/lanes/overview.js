@@ -1,3 +1,4 @@
+import { sizeCanvas } from '../lanes-model.mjs';
 import { timeToX, xToTime, pan } from '../timeline.mjs';
 import { isPrimaryPress, primaryButtonHeld, dragExceeded } from '../state.mjs';
 
@@ -7,7 +8,7 @@ export function createOverviewLane() {
     if (!args) return;
     const { state, view, widthPx: w, palette: p } = args;
     const ratio = window.devicePixelRatio || 1, h = 36;
-    canvas.width = Math.round(w * ratio); canvas.height = h * ratio;
+    sizeCanvas(canvas, w, h, ratio);
     const ctx = canvas.getContext('2d'); ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.fillStyle = p.surface2; ctx.fillRect(0, 0, w, h);
     const whole = { start_s: 0, end_s: Math.max(1, state.duration) };

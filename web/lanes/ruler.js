@@ -1,3 +1,4 @@
+import { sizeCanvas } from '../lanes-model.mjs';
 import { timeToX, formatTenths } from '../timeline.mjs';
 import { CANVAS_FONT } from '../theme.mjs';
 
@@ -6,7 +7,7 @@ export function createRulerLane() {
   function draw() {
     if (!args) return;
     const { view, widthPx: w, palette: p } = args, h = 32, ratio = window.devicePixelRatio || 1;
-    el.width = Math.round(w * ratio); el.height = h * ratio;
+    sizeCanvas(el, w, h, ratio);
     const ctx = el.getContext('2d'); ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, w, h); ctx.font = CANVAS_FONT;
     const span = view.end_s - view.start_s;

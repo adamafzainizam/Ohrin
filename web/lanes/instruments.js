@@ -20,6 +20,20 @@ export function createInstrumentsLane() {
     const node = document.createElement('div'); node.className = className;
     node.dataset.start = start; node.dataset.end = end; node.textContent = text; track.append(node); return node;
   }
+  function setRoving(index) {
+    const buttons = [...$('blockStrip').children];
+    if (!buttons.length) { roving = 0; return; }
+    roving = Math.max(0, Math.min(index, buttons.length - 1));
+    buttons.forEach((button, i) => { button.tabIndex = i === roving ? 0 : -1; });
+  }
+  function empty() {
+    $('timelineRows').replaceChildren(); $('blockStrip').replaceChildren();
+    const table = $('timelineTable'); table.tHead.replaceChildren(); table.tBodies[0].replaceChildren();
+    const caption = $('timelineCaption'); caption.textContent = ''; caption.hidden = true;
+    $('blockStrip').hidden = true;
+    if (el) el.hidden = true;
+  }
+  function clear() { roving = 0; empty(); }
   function updateMarks() {
     const { state } = args;
     for (const cell of el.querySelectorAll('[data-class]')) {
@@ -29,7 +43,8 @@ export function createInstrumentsLane() {
       cell.title = cell.dataset.description + (mark ? ` · your mark: ${MARKS[mark]}` : '');
     }
     for (const button of $('blockStrip').children) {
-      const index = +button.dataset.index, seg = state.analysis?.instruments?.segments[index];
+      const index = +button.dataset.index, seg = state.analysis?.instruments?.segments?.[index];
+      if (!seg) continue;
       const marks = state.analysis.instruments.classes.map(c => {
         const mark = state.review.labels[segmentTarget(index, c.name)];
         return mark ? `${c.name}: ${MARKS[mark]}` : '';
@@ -43,7 +58,8 @@ export function createInstrumentsLane() {
     args = next;
     const { state } = next;
     const rows = $('timelineRows'), strip = $('blockStrip'), table = $('timelineTable');
-    rows.replaceChildren(); strip.replaceChildren(); table.tHead.replaceChildren(); table.tBodies[0].replaceChildren();
+    // Clear everything first, including the caption, so no early return leaves an old analysis on screen.
+    empty();
     const descriptors = lanesFromAnalysis(state.analysis).filter(lane => lane.provenance === 'model');
     const tl = instrumentTimeline(state.analysis?.instruments, state.analysis?.passage);
     el.hidden = !state.analysing && !tl;
@@ -70,12 +86,12 @@ export function createInstrumentsLane() {
     }
     if (tl && !state.analysing) {
       const cells = tl.rows[0].cells;
-      roving = Math.min(roving, cells.length - 1);
+      roving = Math.max(0, Math.min(roving, cells.length - 1));
       cells.forEach((cell, index) => {
         const button = document.createElement('button'); button.type = 'button'; button.className = 'tl-block';
         button.dataset.index = index; button.dataset.focusId = `seg-${index}`;
         button.tabIndex = index === roving ? 0 : -1; button.setAttribute('aria-controls', 'segmentReview'); button.textContent = index + 1;
-        button.addEventListener('click', () => { roving = index; actions.selectBlock(index); });
+        button.addEventListener('click', () => { setRoving(index); actions.selectBlock(index); });
         button.addEventListener('focus', () => {
           const { view, state } = args;
           if (cell.start_s >= view.start_s - 1e-6 && cell.end_s <= view.end_s + 1e-6) return;
@@ -83,17 +99,18 @@ export function createInstrumentsLane() {
           const next = cell.end_s - cell.start_s > span
             ? fit(cell.start_s, cell.end_s, state.duration)
             : pan(view, cell.start_s < view.start_s ? cell.start_s - view.start_s : cell.end_s - view.end_s, state.duration);
-          actions.setView(next);
+          // Restored or scripted focus only reveals the block; a user's own focus move is a gesture.
+          if (actions.programmaticFocus?.()) actions.reveal(next); else actions.setView(next);
         });
         strip.append(button);
       });
+      setRoving(state.selectedBlock ?? roving);
       strip.onkeydown = event => {
         const buttons = [...strip.children], current = buttons.indexOf(document.activeElement);
         if (current < 0) return;
         const index = { ArrowRight: current + 1, ArrowDown: current + 1, ArrowLeft: current - 1, ArrowUp: current - 1, Home: 0, End: buttons.length - 1 }[event.key];
         if (index === undefined) return;
-        event.preventDefault(); roving = Math.max(0, Math.min(buttons.length - 1, index));
-        buttons.forEach((button, i) => { button.tabIndex = i === roving ? 0 : -1; }); buttons[roving].focus();
+        event.preventDefault(); setRoving(index); buttons[roving].focus();
       };
       const head = table.tHead.insertRow();
       for (const text of ['Time', ...tl.rows.map(row => row.name)]) { const th = document.createElement('th'); th.scope = 'col'; th.textContent = text; head.append(th); }
@@ -107,10 +124,16 @@ export function createInstrumentsLane() {
       if (cells.length === 1) parts.push('Only one block: no change over time can be shown.');
       $('timelineCaption').textContent = parts.join(' '); updateMarks();
     }
-    strip.hidden = !!state.analysing;
-    $('timelineCaption').hidden = !!state.analysing;
+    const showStrip = Boolean(tl) && !state.analysing;
+    strip.hidden = !showStrip;
+    $('timelineCaption').hidden = !showStrip;
     reposition(next);
   }
-  return { mount(target, callbacks) { el = target; actions = callbacks; }, render, reposition,
-    update(state) { args = { ...args, state }; if (!el.hidden && !state.analysing && state.analysis?.instruments?.available) updateMarks(); } };
+  return { mount(target, callbacks) { el = target; actions = callbacks; }, render, reposition, clear,
+    update(state) {
+      const previous = args?.state?.selectedBlock;
+      args = { ...args, state };
+      if (state.selectedBlock !== null && state.selectedBlock !== previous) setRoving(state.selectedBlock);
+      if (!el.hidden && !state.analysing && state.analysis?.instruments?.available) updateMarks();
+    } };
 }

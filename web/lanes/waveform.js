@@ -1,3 +1,4 @@
+import { sizeCanvas } from '../lanes-model.mjs';
 import { timeToX, xToTime } from '../timeline.mjs';
 import { peaksForView } from '../peaks.mjs';
 import { clampSelection, resolveDrag, dragExceeded, isPrimaryPress, primaryButtonHeld } from '../state.mjs';
@@ -10,7 +11,7 @@ export function createWaveformLane() {
     if (!args || !el) return;
     const { state, view, widthPx: w, palette: p } = args;
     const h = 120, ratio = window.devicePixelRatio || 1;
-    el.width = Math.round(w * ratio); el.height = h * ratio;
+    sizeCanvas(el, w, h, ratio);
     const ctx = el.getContext('2d'); ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, w, h);
     const sel = preview || state.selection;
