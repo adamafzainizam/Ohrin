@@ -51,7 +51,13 @@ export function createTransport({ player, store, announce, resume = async () => 
     frameFns.push(fn);
     return () => { const i = frameFns.indexOf(fn); if (i >= 0) frameFns.splice(i, 1); };
   }
-  function seek(t) { rangeEnd = null; selectionPlaying = false; player.currentTime = t; }
+  function seek(t) {
+    rangeEnd = null;
+    // A seek while selection playback runs keeps looping, unless it lands outside the selection.
+    const { selection } = store.get();
+    if (player.paused || t < selection.start || t > selection.end) selectionPlaying = false;
+    player.currentTime = t;
+  }
 
   player.addEventListener('play', () => startLoop());
   player.addEventListener('pause', stopLoop);

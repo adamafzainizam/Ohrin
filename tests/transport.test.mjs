@@ -156,3 +156,20 @@ test('a paused seek to the track end does not loop or start playback', async t =
   assert.equal(player.currentTime, 240);
   assert.deepEqual(player.calls, []);
 });
+
+test('a seek inside the selection during selection playback still loops at the track end', async t => {
+  stubRaf(t);
+  globalThis.requestAnimationFrame = () => 1;
+  const player = fakePlayer();
+  const store = createStore({ selection: { start: 200, end: 240 } });
+  const transport = createTransport({ player, store, announce() {}, isLooping: () => true });
+  player.currentTime = 200;
+  await transport.play();
+  transport.seek(220); // while playing, inside the selection
+  player.calls.length = 0;
+  player.currentTime = 240; player.paused = true;
+  player.emit('ended');
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(player.currentTime, 200);
+  assert.deepEqual(player.calls, ['play']);
+});
