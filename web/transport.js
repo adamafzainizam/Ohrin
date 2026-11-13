@@ -5,6 +5,7 @@ import { shouldLoop, shouldStop } from './state.mjs';
 export function createTransport({ player, store, announce, resume = async () => {}, isLooping = () => false }) {
   let playGeneration = 0;
   let playPending = false;
+  let selectionPlaying = false; // true only while play()/toggle started selection playback
   let rangeEnd = null; // set by playRange: stop here once, ignoring loop
   let rafId = null;
   const frameFns = [];
@@ -20,7 +21,7 @@ export function createTransport({ player, store, announce, resume = async () => 
   function startLoop() { if (rafId === null) rafId = requestAnimationFrame(tick); }
   function stopLoop() { if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; } }
   function checkRange() {
-    if (rangeEnd !== null && player.currentTime >= rangeEnd) { rangeEnd = null; playGeneration++; player.pause(); }
+    if (rangeEnd !== null && player.currentTime >= rangeEnd) { rangeEnd = null; selectionPlaying = false; playGeneration++; player.pause(); }
   }
 
   async function startPlayback() {
@@ -29,13 +30,13 @@ export function createTransport({ player, store, announce, resume = async () => 
     catch (error) { if (token === playGeneration) announce(error.message); }
     finally { if (token === playGeneration) playPending = false; }
   }
-  function play() { rangeEnd = null; return startPlayback(); }
-  function pause() { playGeneration++; playPending = false; rangeEnd = null; player.pause(); }
+  function play() { rangeEnd = null; selectionPlaying = true; return startPlayback(); }
+  function pause() { playGeneration++; playPending = false; rangeEnd = null; selectionPlaying = false; player.pause(); }
   // Drop any in-flight play request without pausing (used when a new file loads).
-  function cancel() { playGeneration++; playPending = false; rangeEnd = null; }
+  function cancel() { playGeneration++; playPending = false; rangeEnd = null; selectionPlaying = false; }
   async function playRange(start_s, end_s) {
     player.currentTime = start_s;
-    rangeEnd = end_s;
+    rangeEnd = end_s; selectionPlaying = false;
     await startPlayback();
   }
   function toggle() {
@@ -50,7 +51,7 @@ export function createTransport({ player, store, announce, resume = async () => 
     frameFns.push(fn);
     return () => { const i = frameFns.indexOf(fn); if (i >= 0) frameFns.splice(i, 1); };
   }
-  function seek(t) { rangeEnd = null; player.currentTime = t; }
+  function seek(t) { rangeEnd = null; selectionPlaying = false; player.currentTime = t; }
 
   player.addEventListener('play', () => startLoop());
   player.addEventListener('pause', stopLoop);
@@ -58,13 +59,13 @@ export function createTransport({ player, store, announce, resume = async () => 
   // stops at EOF, already paused. Handle that natural end here. A completed block range does not loop.
   player.addEventListener('ended', () => {
     stopLoop();
-    const wasRange = rangeEnd !== null;
-    rangeEnd = null;
-    if (wasRange || !isLooping()) return;
+    const loopIt = selectionPlaying && rangeEnd === null && isLooping();
+    rangeEnd = null; selectionPlaying = false;
+    if (!loopIt) return;
     const { selection } = store.get();
     if (!shouldLoop(player.currentTime, selection, true)) return;
     player.currentTime = selection.start;
-    startPlayback();
+    play();
   });
   player.addEventListener('timeupdate', () => {
     if (rangeEnd !== null) { checkRange(); if (player.paused) emitFrame(); return; }

@@ -128,3 +128,31 @@ test('ended does not loop a completed block range or a paused seek', async t => 
   player.emit('timeupdate');
   assert.equal(player.currentTime, 10);
 });
+
+test('a block range that ends at the track end does not loop (timeupdate, pause, ended)', async t => {
+  stubRaf(t);
+  globalThis.requestAnimationFrame = () => 1;
+  const player = fakePlayer();
+  const store = createStore({ selection: { start: 200, end: 240 } });
+  const transport = createTransport({ player, store, announce() {}, isLooping: () => true });
+  await transport.playRange(235, 240);
+  player.calls.length = 0;
+  player.currentTime = 240; player.paused = true;
+  player.emit('timeupdate'); player.emit('pause'); player.emit('ended');
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(player.currentTime, 240);
+  assert.deepEqual(player.calls, []);
+});
+
+test('a paused seek to the track end does not loop or start playback', async t => {
+  stubRaf(t);
+  globalThis.requestAnimationFrame = () => 1;
+  const player = fakePlayer();
+  const store = createStore({ selection: { start: 200, end: 240 } });
+  const transport = createTransport({ player, store, announce() {}, isLooping: () => true });
+  transport.seek(240);
+  player.emit('timeupdate'); player.emit('ended');
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(player.currentTime, 240);
+  assert.deepEqual(player.calls, []);
+});

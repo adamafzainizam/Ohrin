@@ -21,6 +21,7 @@ export function createEnergyLane() {
       if (right - left > 85) { ctx.fillStyle = p.textMuted; ctx.fillText('Not analysed', left + 6, h / 2 + 4); }
     }
     const items = lanesFromAnalysis(state.analysis)[0].items;
+    ctx.lineWidth = 1;
     for (const db of [-30, -20, -10]) {
       const y = 4 + -db / 40 * 56;
       ctx.strokeStyle = p.grid; ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
