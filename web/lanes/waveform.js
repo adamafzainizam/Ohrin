@@ -1,11 +1,11 @@
 import { sizeCanvas } from '../lanes-model.mjs';
 import { timeToX, xToTime } from '../timeline.mjs';
-import { peaksForView } from '../peaks.mjs';
+import { peaksForView, buildPeakPyramid } from '../peaks.mjs';
 import { clampSelection, resolveDrag, dragExceeded, isPrimaryPress, primaryButtonHeld } from '../state.mjs';
 
 // A single retained mono buffer; peaks are cached by view and CSS pixel width.
 export function createWaveformLane() {
-  let el, actions, args, samples = null, sampleRate = 1, cacheKey = '', peaks;
+  let el, actions, args, samples = null, pyramid = null, sampleRate = 1, cacheKey = '', peaks;
   let drag = null, preview = null, generation = 0;
   function draw() {
     if (!args || !el) return;
@@ -21,7 +21,7 @@ export function createWaveformLane() {
     if (samples) {
       const bins = Math.max(1, Math.ceil(w));
       const key = `${view.start_s}:${view.end_s}:${bins}`;
-      if (key !== cacheKey) { peaks = peaksForView(samples, sampleRate, view, bins); cacheKey = key; }
+      if (key !== cacheKey) { peaks = peaksForView(samples, sampleRate, view, bins, pyramid); cacheKey = key; }
       for (let i = 0; i < bins; i++) {
         const x = i * w / bins;
         ctx.strokeStyle = x >= left && x <= right ? p.wave : p.waveDim;
@@ -64,7 +64,7 @@ export function createWaveformLane() {
     },
     async loadFile(file) {
       const token = ++generation;
-      samples = null; cacheKey = ''; preview = null; drag = null;
+      samples = null; pyramid = null; cacheKey = ''; preview = null; drag = null;
       const context = new AudioContext();
       try {
         const decoded = await context.decodeAudioData(await file.arrayBuffer());
@@ -74,10 +74,11 @@ export function createWaveformLane() {
           const channel = decoded.getChannelData(c);
           for (let i = 0; i < mono.length; i++) mono[i] += channel[i] / decoded.numberOfChannels;
         }
+        pyramid = buildPeakPyramid(mono);
         samples = mono; sampleRate = decoded.sampleRate; draw();
       } finally { await context.close(); }
     },
-    clear() { generation++; samples = null; cacheKey = ''; drag = null; preview = null; },
+    clear() { generation++; samples = null; pyramid = null; cacheKey = ''; drag = null; preview = null; },
     render(next) { args = next; draw(); },
     reposition(next) { args = { ...args, ...next }; draw(); },
   };
