@@ -51,6 +51,7 @@ export function peaksForView(samples, sampleRate, view, bins, pyramid) {
     const span = b - a;
     if (a < 0) a = 0;
     if (b > n) b = n;
+    if (b <= a) continue; // empty after clamping: 0, 0
     let min = Infinity;
     let max = -Infinity;
     let level = null;

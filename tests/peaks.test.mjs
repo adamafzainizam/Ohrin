@@ -186,3 +186,44 @@ test('edge rules hold with a pyramid', () => {
   const deep = peaksForView(ramped, sr, { start_s: 10, end_s: 10.001 }, 4, pr);
   for (let i = 0; i < 4; i++) assert.equal(deep[2 * i], deep[2 * i + 1]);
 });
+
+test('empty input leaves bins at zero, with and without a pyramid', () => {
+  const empty = new Float32Array(0);
+  const view = { start_s: -1, end_s: 1 };
+  assert.deepEqual(Array.from(peaksForView(empty, 1, view, 1)), [0, 0]);
+  assert.deepEqual(Array.from(peaksForView(empty, 1, view, 3, buildPeakPyramid(empty))), [0, 0, 0, 0, 0, 0]);
+});
+
+test('pyramid reads the coarsest level whose block is at most half the bin', () => {
+  // Hand-built levels with distinguishable values, so the result names the level used.
+  const n = 1_000_000;
+  const mk = (block, value) => {
+    const c = Math.ceil(n / block);
+    return { block, mins: new Float32Array(c).fill(-value), maxs: new Float32Array(c).fill(value) };
+  };
+  const levels = [mk(256, 1), mk(1024, 2), mk(4096, 3)];
+  const pyramid = { baseBlock: 256, factor: 4, length: n, levels };
+  const samples = new Float32Array(n);
+  const reads = [0, 0, 0];
+  const counted = levels.map((l, i) => ({
+    block: l.block,
+    mins: new Proxy(l.mins, { get(t, p) { if (typeof p === 'string' && /^\d+$/.test(p)) reads[i]++; return t[p]; } }),
+    maxs: l.maxs,
+  }));
+  const run = (spb) => {
+    reads.fill(0);
+    const sr = 1000, bins = 4;
+    const out = peaksForView(samples, sr, { start_s: 0, end_s: bins * spb / sr }, bins, { ...pyramid, levels: counted });
+    return out[1];
+  };
+  assert.equal(run(511), 0);          // below 2 * 256: raw scan, no level read
+  assert.deepEqual(reads, [0, 0, 0]);
+  assert.equal(run(512), 1);          // level 0 only
+  assert.ok(reads[0] > 0 && reads[1] === 0 && reads[2] === 0);
+  assert.ok(reads[0] <= 4 * (512 / 256 + 1));
+  assert.equal(run(2048), 2);         // level 1, not level 0
+  assert.equal(reads[0], 0); assert.ok(reads[1] > 0 && reads[1] <= 4 * (2048 / 1024 + 1));
+  assert.equal(run(8192), 3);         // level 2, not 0 or 1
+  assert.equal(reads[0], 0); assert.equal(reads[1], 0);
+  assert.ok(reads[2] > 0 && reads[2] <= 4 * (8192 / 4096 + 1));
+});
