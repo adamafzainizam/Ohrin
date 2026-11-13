@@ -9,8 +9,8 @@ import { initTheme, getPalette, onInvalidate, observeCanvasHost } from './theme.
 import { createStore, fileLoaded } from './store.mjs';
 import { createTransport } from './transport.js';
 import { createInspector } from './inspector.js';
-import { fit, formatTenths } from './timeline.mjs';
-import { pickAudioFile } from './input-rules.mjs';
+import { fit, formatTenths, zoomAt, pan, followPage, xToTime } from './timeline.mjs';
+import { pickAudioFile, zoomKeyAllowed, zoomFactorFromWheel } from './input-rules.mjs';
 import { clampSelection, formatTime, emptyReview, reviewKey, reconcileReview, pruneReview,
   settleRequest, buildPassageNote } from './state.mjs';
 
@@ -34,7 +34,7 @@ const playhead = createPlayhead();
 const actions = {
   select: updateSelection,
   seek: t => transport.seek(t),
-  setView: view => store.set('view', { view }),
+  setView: view => setUserView(view),
   selectBlock(index) {
     store.set('review', { selectedBlock: index });
     announce(`Block ${index + 1} selected. Marking controls are in the inspector.`);
@@ -71,7 +71,14 @@ store.subscribe('analysis', () => preserveFocus(() => {
 store.subscribe('review', () => preserveFocus(() => {
   instrumentsLane.update(store.get()); inspector.render('review');
 }));
-store.subscribe('ui', () => { if (store.get().duration) renderLanes(true); });
+let lastLaneUi = store.get();
+store.subscribe('ui', state => {
+  if (state.file !== lastLaneUi.file || state.duration !== lastLaneUi.duration || state.analysing !== lastLaneUi.analysing) {
+    if (state.duration) renderLanes(true);
+  }
+  lastLaneUi = state;
+  for (const id of ['zoomOut', 'zoomIn', 'fitPassage', 'fitTrack']) $(id).disabled = !state.duration;
+});
 const ICON_PLAY = '<svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M232.4,114.49,88.32,26.35a16,16,0,0,0-16.2-.3A15.86,15.86,0,0,0,64,39.87V216.13A15.94,15.94,0,0,0,80,232a16.07,16.07,0,0,0,8.36-2.35L232.4,141.51a15.81,15.81,0,0,0,0-27ZM80,215.94V40l143.83,88Z"/></svg>';
 const ICON_PAUSE = '<svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,32H160a16,16,0,0,0-16,16V208a16,16,0,0,0,16,16h40a16,16,0,0,0,16-16V48A16,16,0,0,0,200,32Zm0,176H160V48h40ZM96,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16H96a16,16,0,0,0,16-16V48A16,16,0,0,0,96,32Zm0,176H56V48H96Z"/></svg>';
 // Registered after transport.bindControls, so these icons replace its text glyphs.
@@ -81,7 +88,67 @@ function updateReadout(t) {
   const d = Number.isFinite(player.duration) ? player.duration : 0;
   setText('timeReadout', `${formatTenths(t)} / ${formatTenths(d)}`);
 }
-transport.onFrame(t => { updateReadout(t); playhead.move(t); });
+transport.onFrame(t => {
+  updateReadout(t);
+  const { view, duration, followPaused } = store.get();
+  if (!player.paused && duration && !followPaused) setView(followPage(view, t, duration));
+  playhead.move(t);
+});
+player.addEventListener('play', () => store.set('ui', { followPaused: false }));
+
+let viewAnnouncement = null;
+function setView(view) {
+  const current = store.get().view;
+  if (view.start_s !== current.start_s || view.end_s !== current.end_s) store.set('view', { view });
+}
+function setUserView(view) {
+  setView(view);
+  if (!player.paused) store.set('ui', { followPaused: true });
+  clearTimeout(viewAnnouncement);
+  viewAnnouncement = setTimeout(() => {
+    const current = store.get().view;
+    announce(`Showing ${formatTenths(current.start_s)} to ${formatTenths(current.end_s)}`);
+  }, 500);
+}
+function zoom(factor) {
+  const { view, duration } = store.get();
+  if (!duration) return;
+  const anchor = player.paused ? (view.start_s + view.end_s) / 2 : player.currentTime;
+  setUserView(zoomAt(view, anchor, factor, duration));
+}
+$('zoomOut').addEventListener('click', () => zoom(1 / 1.5));
+$('zoomIn').addEventListener('click', () => zoom(1.5));
+$('fitPassage').addEventListener('click', () => {
+  const { selection, duration } = store.get();
+  if (duration) setUserView(fit(selection.start, selection.end, duration));
+});
+$('fitTrack').addEventListener('click', () => {
+  const { duration } = store.get();
+  if (duration) setUserView(fit(0, duration, duration));
+});
+const laneStack = $('laneStack');
+laneStack.addEventListener('wheel', event => {
+  const { view, duration } = store.get();
+  if (!duration) return;
+  const rect = canvas.getBoundingClientRect();
+  if (event.ctrlKey || event.metaKey) {
+    event.preventDefault();
+    const x = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+    const anchor = xToTime(x, view, Math.max(1, rect.width));
+    setUserView(zoomAt(view, anchor, Math.max(.01, Math.min(100, zoomFactorFromWheel(event))), duration));
+  } else if (event.shiftKey || event.deltaX) {
+    event.preventDefault();
+    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.width : 1;
+    const delta = event.deltaX || event.deltaY;
+    setUserView(pan(view, delta * unit / Math.max(1, rect.width) * (view.end_s - view.start_s), duration));
+  }
+}, { passive: false });
+laneStack.addEventListener('keydown', event => {
+  if (!laneStack.contains(event.target) || !zoomKeyAllowed(event.target)) return;
+  if (!['+', '=', '-'].includes(event.key)) return;
+  if (event.ctrlKey || event.metaKey || event.altKey) return;
+  event.preventDefault(); zoom(event.key === '-' ? 1 / 1.5 : 1.5);
+});
 function updateExport() {
   const ready = !!store.get().analysis;
   const button = $('exportButton');
@@ -136,6 +203,7 @@ function refreshSelectionUI() {
 async function loadFile(chosen) {
   if (!chosen) return;
   if (objectUrl) URL.revokeObjectURL(objectUrl);
+  clearTimeout(viewAnnouncement);
   transport.cancel(); eq.fileChanged();
   player.pause(); waveformLane.clear(); store.set('ui', { file: chosen, analysing: false });
   requestSeq += 1; // invalidate any in-flight analysis; it no longer owns the button
@@ -212,7 +280,7 @@ $('analyzeButton').addEventListener('click', async () => {
     if (settle().stale) return;
     const review = pruneReview(reconcileReview(store.get().review, reviewKey(file, result.passage)), result.instruments);
     store.set('analysis', { analysis: result, review, selectedBlock: null, analysing: false });
-    actions.setView(fit(result.passage.start_s, result.passage.end_s, store.get().duration));
+    setView(fit(result.passage.start_s, result.passage.end_s, store.get().duration));
   } catch (error) {
     if (!settle().stale) { setText('selectionLabel', error.message); announce(error.message); }
   } finally {

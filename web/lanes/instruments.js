@@ -1,4 +1,4 @@
-import { timeToX } from '../timeline.mjs';
+import { timeToX, fit, pan } from '../timeline.mjs';
 import { lanesFromAnalysis, notAnalysed } from '../lanes-model.mjs';
 import { instrumentTimeline, segmentTarget, formatTime, uncoveredCaption } from '../state.mjs';
 
@@ -75,7 +75,17 @@ export function createInstrumentsLane() {
         const button = document.createElement('button'); button.type = 'button'; button.className = 'tl-block';
         button.dataset.index = index; button.dataset.focusId = `seg-${index}`;
         button.tabIndex = index === roving ? 0 : -1; button.setAttribute('aria-controls', 'segmentReview'); button.textContent = index + 1;
-        button.addEventListener('click', () => { roving = index; actions.selectBlock(index); }); strip.append(button);
+        button.addEventListener('click', () => { roving = index; actions.selectBlock(index); });
+        button.addEventListener('focus', () => {
+          const { view, state } = args;
+          if (cell.start_s >= view.start_s - 1e-6 && cell.end_s <= view.end_s + 1e-6) return;
+          const span = view.end_s - view.start_s;
+          const next = cell.end_s - cell.start_s > span
+            ? fit(cell.start_s, cell.end_s, state.duration)
+            : pan(view, cell.start_s < view.start_s ? cell.start_s - view.start_s : cell.end_s - view.end_s, state.duration);
+          actions.setView(next);
+        });
+        strip.append(button);
       });
       strip.onkeydown = event => {
         const buttons = [...strip.children], current = buttons.indexOf(document.activeElement);

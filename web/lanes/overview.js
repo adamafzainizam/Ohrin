@@ -1,7 +1,8 @@
-import { timeToX } from '../timeline.mjs';
+import { timeToX, xToTime, pan } from '../timeline.mjs';
+import { isPrimaryPress, primaryButtonHeld, dragExceeded } from '../state.mjs';
 
 export function createOverviewLane() {
-  let el, canvas, box, args;
+  let el, canvas, box, args, actions, drag = null;
   function draw() {
     if (!args) return;
     const { state, view, widthPx: w, palette: p } = args;
@@ -17,8 +18,33 @@ export function createOverviewLane() {
     box.style.width = `${Math.max(1, timeToX(view.end_s, whole, w) - timeToX(view.start_s, whole, w))}px`;
   }
   return {
-    mount(target) {
-      el = target; canvas = el.querySelector('canvas'); box = el.querySelector('.overview-view');
+    mount(target, callbacks) {
+      el = target; actions = callbacks; canvas = el.querySelector('canvas'); box = el.querySelector('.overview-view');
+      el.addEventListener('pointerdown', event => {
+        if (!args?.state.duration || !isPrimaryPress(event)) return;
+        drag = { id: event.pointerId, x: event.clientX, view: args.view, inside: box.contains(event.target), moved: false };
+        el.setPointerCapture(event.pointerId);
+      });
+      el.addEventListener('pointermove', event => {
+        if (!drag) return;
+        if (event.pointerId !== drag.id || !primaryButtonHeld(event)) { drag = null; return; }
+        drag.moved ||= dragExceeded(drag.x, event.clientX);
+        if (drag.inside && drag.moved) {
+          const width = Math.max(1, el.getBoundingClientRect().width);
+          actions.setView(pan(drag.view, (event.clientX - drag.x) / width * args.state.duration, args.state.duration));
+        }
+      });
+      el.addEventListener('pointerup', event => {
+        if (!drag || event.pointerId !== drag.id) return;
+        const before = drag; drag = null;
+        if (before.inside && before.moved) return;
+        const rect = el.getBoundingClientRect(), whole = { start_s: 0, end_s: args.state.duration };
+        const t = xToTime(Math.max(0, Math.min(rect.width, event.clientX - rect.left)), whole, Math.max(1, rect.width));
+        const centre = (before.view.start_s + before.view.end_s) / 2;
+        actions.setView(pan(before.view, t - centre, args.state.duration));
+      });
+      el.addEventListener('pointercancel', () => { drag = null; });
+      el.addEventListener('lostpointercapture', () => { drag = null; });
     },
     render(next) { args = next; draw(); },
     reposition(next) { args = { ...args, ...next }; draw(); },

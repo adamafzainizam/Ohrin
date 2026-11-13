@@ -177,3 +177,10 @@ input[type=number]{font-family:var(--font-mono);font-variant-numeric:tabular-num
   .playhead-axis{left:96px}
   .lane-provenance{margin-left:96px}
 }
+
+/* Timeline navigation keeps the ruler canvas on the same axis as every plot. */
+.ruler-content{min-width:0}
+.zoom-controls{display:flex;justify-content:flex-end;gap:4px;padding:4px 4px 0;min-height:28px}
+.zoom-controls button{min-width:24px;min-height:24px;padding:2px 7px;font-size:12px}
+.overview-view{pointer-events:auto;cursor:grab;box-sizing:border-box}
+.overview-view:active{cursor:grabbing}

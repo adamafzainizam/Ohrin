@@ -104,3 +104,9 @@ test('app shell regions exist and the landing page is gone', () => {
   assert.match(indexHtml, /Open an audio file/);
   assert.match(indexHtml, /Audio stays on this machine/);
 });
+
+test('shared axis exposes named zoom and fit controls', () => {
+  for (const [id, name] of [['zoomOut', 'Zoom out'], ['zoomIn', 'Zoom in'], ['fitPassage', 'Fit passage'], ['fitTrack', 'Fit track']]) {
+    assert.match(indexHtml, new RegExp(`<button[^>]*id="${id}"[^>]*aria-label="${name}"`));
+  }
+});

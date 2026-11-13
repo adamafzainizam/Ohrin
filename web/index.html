@@ -54,7 +54,7 @@
       </div>
       <div id="waveWrap" class="wave-wrap" hidden>
         <div id="laneStack" class="lane-stack" tabindex="0" aria-label="Time aligned audio lanes">
-          <div class="lane-row ruler-row"><div class="lane-label">Time</div><canvas id="ruler" class="lane-plot" aria-label="Track time ruler"></canvas></div>
+          <div class="lane-row ruler-row"><div class="lane-label">Time</div><div class="ruler-content"><div class="zoom-controls" role="group" aria-label="Timeline view"><button id="zoomOut" type="button" aria-label="Zoom out" disabled>−</button><button id="zoomIn" type="button" aria-label="Zoom in" disabled>+</button><button id="fitPassage" type="button" aria-label="Fit passage" disabled>Passage</button><button id="fitTrack" type="button" aria-label="Fit track" disabled>Track</button></div><canvas id="ruler" class="lane-plot" aria-label="Track time ruler"></canvas></div></div>
           <div class="lane-row"><div class="lane-label">Waveform</div><canvas id="waveform" class="lane-plot" height="120" aria-label="Audio waveform. Drag to select a passage."></canvas></div>
           <div class="lane-row"><div class="lane-label">Measured</div><canvas id="energyChart" class="lane-plot" height="64" aria-label="Measured RMS audio level on the track time axis"></canvas></div>
           <div id="instrumentTimeline" class="instrument-lanes" hidden>
