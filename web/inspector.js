@@ -16,7 +16,7 @@ export function createInspector({ store, announce, transport }) {
       $(`panel-${name}`).hidden = !active;
     }
   }
-  function activate(name) { store.set('ui', { activeTab: name }); }
+  function activate(name) { store.set({ activeTab: name }); }
   for (const name of names) {
     const tab = $(`tab-${name}`);
     tab.addEventListener('click', () => activate(name));
@@ -45,13 +45,13 @@ export function createInspector({ store, announce, transport }) {
       const input = document.createElement('input'); input.type = 'radio'; input.name = group; input.value = value;
       input.checked = store.get().review.labels[target] === value;
       input.dataset.focusId = `${group}-${value}`;
-      input.addEventListener('change', () => { store.set('review', { review: setLabel(store.get().review, target, value) }); announceTally(); });
+      input.addEventListener('change', () => { store.set({ review: setLabel(store.get().review, target, value) }); announceTally(); });
       label.append(input, ' ', text); set.append(label);
     }
     const clear = document.createElement('button'); clear.type = 'button'; clear.className = 'review-clear'; clear.textContent = 'Clear';
     clear.dataset.focusId = `${group}-clear`;
     clear.setAttribute('aria-label', `Clear mark: ${legend}`);
-    clear.addEventListener('click', () => { store.set('review', { review: setLabel(store.get().review, target, null) }); announceTally(); });
+    clear.addEventListener('click', () => { store.set({ review: setLabel(store.get().review, target, null) }); announceTally(); });
     set.append(clear);
     return set;
   }
