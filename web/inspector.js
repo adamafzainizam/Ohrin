@@ -6,6 +6,35 @@ function setTextIfChanged(id, value) { if ($(id).textContent !== value) $(id).te
 
 // Passage findings and listening review. Plot ownership lives in lanes/*.js.
 export function createInspector({ store, announce, transport }) {
+  const names = ['measured', 'pulse', 'instruments', 'guitar', 'arrange', 'notes'];
+  function renderTabs() {
+    const { activeTab } = store.get();
+    for (const name of names) {
+      const active = name === activeTab;
+      $(`tab-${name}`).setAttribute('aria-selected', String(active));
+      $(`tab-${name}`).tabIndex = active ? 0 : -1;
+      $(`panel-${name}`).hidden = !active;
+    }
+  }
+  function activate(name) { store.set('ui', { activeTab: name }); }
+  for (const name of names) {
+    const tab = $(`tab-${name}`);
+    tab.addEventListener('click', () => activate(name));
+    tab.addEventListener('keydown', event => {
+      const current = names.indexOf(name);
+      const next = { ArrowRight: (current + 1) % names.length, ArrowDown: (current + 1) % names.length,
+        ArrowLeft: (current + names.length - 1) % names.length, ArrowUp: (current + names.length - 1) % names.length,
+        Home: 0, End: names.length - 1 }[event.key];
+      if (next === undefined) return;
+      event.preventDefault(); activate(names[next]); $(`tab-${names[next]}`).focus();
+    });
+  }
+  function renderAvailability() {
+    const hasAnalysis = Boolean(store.get().analysis);
+    for (const node of $('results').querySelectorAll('.inspector-empty')) node.hidden = hasAnalysis;
+    for (const node of $('results').querySelectorAll('.inspector-content')) node.hidden = !hasAnalysis;
+    $('results').hidden = false;
+  }
   const CHOICES = [['heard', 'I hear it'], ['not_heard', "I don't hear it"], ['unsure', 'Unsure']];
 
   function reviewFieldset(target, group, legend) {
@@ -37,7 +66,8 @@ export function createInspector({ store, announce, transport }) {
     const { analysis, review, selectedBlock: selectedSegment } = store.get();
     const info = analysis?.instruments;
     const available = Boolean(info && info.available);
-    $('reviewWrap').hidden = !available;
+    $('reviewTally').hidden = !available;
+    $('reviewCaveat').hidden = !available;
     const inst = $('instrumentCandidates');
     if (available) {
       inst.replaceChildren();
@@ -50,7 +80,7 @@ export function createInspector({ store, announce, transport }) {
     const box = $('segmentReview');
     box.replaceChildren();
     const seg = available && selectedSegment !== null ? info.segments[selectedSegment] : null;
-    box.hidden = !available || !$('instrumentTimeline') || $('instrumentTimeline').hidden;
+    box.hidden = !available || !info.segments?.length;
     if (!box.hidden) {
       if (!seg) {
         const p = document.createElement('p'); p.className = 'subtle'; p.textContent = 'Select a block in the timeline to mark what you hear in it.'; box.append(p);
@@ -109,9 +139,17 @@ export function createInspector({ store, announce, transport }) {
   }
 
   function render(topic) {
-    if (!store.get().analysis) return;
+    renderTabs();
+    if (topic === 'ui') { if (store.get().analysis) renderReview(); return; }
+    renderAvailability();
+    if (!store.get().analysis) {
+      for (const id of ['observations', 'tempoCandidates', 'chordCandidates', 'instrumentCandidates', 'segmentReview']) $(id).replaceChildren();
+      $('reviewTally').hidden = true; $('reviewCaveat').hidden = true; $('segmentReview').hidden = true;
+      return;
+    }
     if (topic === 'analysis') showAnalysis();
     else if (topic === 'review') renderReview();
   }
+  render('analysis');
   return { render };
 }

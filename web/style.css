@@ -184,3 +184,16 @@ input[type=number]{font-family:var(--font-mono);font-variant-numeric:tabular-num
 .zoom-controls button{min-width:24px;min-height:24px;padding:2px 7px;font-size:12px}
 .overview-view{pointer-events:auto;cursor:grab;box-sizing:border-box}
 .overview-view:active{cursor:grabbing}
+
+/* Inspector panels remain mounted so corrections survive tab changes. */
+.inspector-tabs{display:flex;flex-wrap:wrap;gap:4px;margin:12px 0}
+.inspector-tabs [role=tab]{padding:6px 9px;min-width:24px;min-height:28px;border-radius:4px;background:var(--surface-2);border:1px solid var(--line-strong);color:var(--text-muted)}
+.inspector-tabs [role=tab][aria-selected=true]{color:var(--accent);border-color:var(--accent)}
+.inspector-panel{min-width:0;font-size:15px;line-height:1.5;padding:4px 0}
+.inspector-panel:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.inspector-panel h3{font-size:18px;margin:8px 0}
+.passage-scope,.inspector-empty{color:var(--text-muted)}
+.passage-scope{font-size:12px;margin:0 0 10px}
+.idea-label{border:1px dashed var(--line-strong);padding:4px 8px;font-size:12px;display:inline-block}
+.inspector{padding:12px;background:var(--surface-1);border:1px solid var(--line);border-radius:var(--r-panel)}
+.results>h2{font-size:18px;margin:0}

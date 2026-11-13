@@ -36,8 +36,13 @@ const actions = {
   seek: t => transport.seek(t),
   setView: view => setUserView(view),
   selectBlock(index) {
-    store.set('review', { selectedBlock: index });
-    announce(`Block ${index + 1} selected. Marking controls are in the inspector.`);
+    store.set('ui', { activeTab: 'instruments', selectedBlock: index });
+    document.querySelector(`[data-focus-id="seg-${index}"]`)?.focus({ preventScroll: true });
+    const box = $('inspector').getBoundingClientRect();
+    if (window.matchMedia('(max-width: 1279px)').matches && (box.top >= window.innerHeight || box.bottom <= 0)) {
+      $('inspector').scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
+    }
+    announce(`Block ${index + 1} selected. Marking controls are in the Instruments tab.`);
   },
 };
 overviewLane.mount($('overview'), actions);
@@ -75,6 +80,9 @@ let lastLaneUi = store.get();
 store.subscribe('ui', state => {
   if (state.file !== lastLaneUi.file || state.duration !== lastLaneUi.duration || state.analysing !== lastLaneUi.analysing) {
     if (state.duration) renderLanes(true);
+  }
+  if (state.activeTab !== lastLaneUi.activeTab || state.selectedBlock !== lastLaneUi.selectedBlock) {
+    preserveFocus(() => { instrumentsLane.update(state); inspector.render('ui'); });
   }
   lastLaneUi = state;
   for (const id of ['zoomOut', 'zoomIn', 'fitPassage', 'fitTrack']) $(id).disabled = !state.duration;
@@ -169,7 +177,6 @@ function announce(text) {
 }
 function clearPassageFindings() {
   store.set('analysis', { analysis: null, analysisRequest: null, review: emptyReview(), selectedBlock: null });
-  $('results').hidden = true;
   $('chordCorrection').value = '';
   $('arrangementNotes').value = '';
 }

@@ -110,3 +110,17 @@ test('shared axis exposes named zoom and fit controls', () => {
     assert.match(indexHtml, new RegExp(`<button[^>]*id="${id}"[^>]*aria-label="${name}"`));
   }
 });
+
+test('inspector tabs own labelled persistent panels and note fields', () => {
+  const names = ['measured', 'pulse', 'instruments', 'guitar', 'arrange', 'notes'];
+  assert.match(indexHtml, /role="tablist"[^>]*aria-label="Inspector/);
+  for (const name of names) {
+    assert.match(indexHtml, new RegExp(`<button[^>]*id="tab-${name}"[^>]*role="tab"[^>]*aria-controls="panel-${name}"`));
+    const panel = indexHtml.match(new RegExp(`<section[^>]*id="panel-${name}"[^>]*role="tabpanel"[^>]*aria-labelledby="tab-${name}"[^>]*tabindex="0"[^>]*>([\\s\\S]*?)<\\/section>`));
+    assert.ok(panel, `panel ${name} has tab association and focusability`);
+    assert.match(panel[1], /class="inspector-empty"/);
+    if (['measured', 'pulse', 'guitar', 'arrange'].includes(name)) assert.match(panel[1], /For the whole passage/);
+    if (name === 'guitar') assert.match(panel[1], /id="chordCorrection"/);
+    if (name === 'arrange') assert.match(panel[1], /id="arrangementNotes"/);
+  }
+});

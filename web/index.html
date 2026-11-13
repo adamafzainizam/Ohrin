@@ -71,25 +71,47 @@
     </div>
     <aside id="inspector" class="inspector" aria-label="Inspector">
       <p id="liveStatus" class="visually-hidden" role="status" aria-live="polite"></p>
-      <section class="results" id="results" aria-label="Results" hidden>
-        <div class="section-head"><h2>Findings</h2><span class="tag">Measured from the mix</span></div>
-        <div id="segmentReview" class="segment-review" role="region" aria-label="Block review" hidden></div>
-        <div class="result-grid">
-          <article class="panel"><h3>Measured changes</h3><ul id="observations"></ul><p class="subtle">Level, onset change, and frequency balance come from the mixed signal. They do not identify instruments.</p></article>
-          <article class="panel"><h3>Pulse candidates</h3><div id="tempoCandidates" class="candidate-list"></div><p class="subtle">Autocorrelation can lock onto half-time or subdivisions. Tap and listen before trusting a beat grid.</p></article>
+      <section class="results" id="results" aria-label="Results">
+        <h2>Inspector</h2>
+        <div class="inspector-tabs" role="tablist" aria-label="Inspector findings">
+          <button id="tab-measured" type="button" role="tab" aria-controls="panel-measured" aria-selected="true" tabindex="0">Measured</button>
+          <button id="tab-pulse" type="button" role="tab" aria-controls="panel-pulse" aria-selected="false" tabindex="-1">Pulse</button>
+          <button id="tab-instruments" type="button" role="tab" aria-controls="panel-instruments" aria-selected="false" tabindex="-1">Instruments</button>
+          <button id="tab-guitar" type="button" role="tab" aria-controls="panel-guitar" aria-selected="false" tabindex="-1">Guitar</button>
+          <button id="tab-arrange" type="button" role="tab" aria-controls="panel-arrange" aria-selected="false" tabindex="-1">Arrange</button>
+          <button id="tab-notes" type="button" role="tab" aria-controls="panel-notes" aria-selected="false" tabindex="-1">Notes</button>
         </div>
-        <div class="result-grid">
-          <article class="panel"><span class="panel-label">MODEL OUTPUT</span><h3>Instrument candidates</h3><div id="instrumentCandidates" class="candidate-list"></div><p id="instrumentCaveat" class="subtle"></p>
-            <div id="reviewWrap" hidden><p id="reviewTally" class="review-tally"></p><p class="subtle">Your marks are your own listening judgement. They stay in this tab, are not sent anywhere, and are not used to train or score the model. Reloading clears them. Export the note to keep them.</p></div></article>
-        </div>
-        <div class="section-head next-head"><h2>Ideas to try</h2><span class="tag">Ideas, not detections</span></div>
-        <div class="result-grid">
-          <article class="panel"><span class="panel-label">FOR GUITARISTS</span><h3>Harmonic sketches</h3><p class="subtle">Experimental pitch-class matches from a full mix. Fret shapes are playable standard-tuning suggestions, not a transcription.</p><div id="chordCandidates" class="chord-list"></div><label class="note-label">My chord correction <input id="chordCorrection" type="text" placeholder="What do you hear instead?"></label></article>
-          <article class="panel"><span class="panel-label">FOR PRODUCERS</span><h3>Arrange the contrast</h3><p id="creativeIdea" class="idea"></p><label class="note-label">My arrangement notes <textarea id="arrangementNotes" rows="4" placeholder="Which layer changes here? What would you try?"></textarea></label></article>
-        </div>
-        <p class="subtle export-note">Export keeps the passage, findings, your corrections and listening marks together. Audio is excluded.</p>
+        <section id="panel-measured" class="inspector-panel" role="tabpanel" aria-labelledby="tab-measured" tabindex="0">
+          <p class="passage-scope">For the whole passage</p>
+          <p class="inspector-empty">Measured observations will appear after you analyse a passage.</p>
+          <div class="inspector-content" hidden><h3>Measured changes</h3><ul id="observations"></ul><p class="subtle">Level, onset change, and frequency balance come from the mixed signal. They do not identify instruments.</p></div>
+        </section>
+        <section id="panel-pulse" class="inspector-panel" role="tabpanel" aria-labelledby="tab-pulse" tabindex="0" hidden>
+          <p class="passage-scope">For the whole passage</p>
+          <p class="inspector-empty">Tentative pulse candidates will appear after analysis.</p>
+          <div class="inspector-content" hidden><h3>Pulse candidates</h3><div id="tempoCandidates" class="candidate-list"></div><p class="subtle">Autocorrelation can lock onto half-time or subdivisions. Tap and listen before trusting a beat grid.</p></div>
+        </section>
+        <section id="panel-instruments" class="inspector-panel" role="tabpanel" aria-labelledby="tab-instruments" tabindex="0" hidden>
+          <p class="inspector-empty">Uncertain instrument candidates and block marking controls will appear after analysis.</p>
+          <div class="inspector-content" hidden><h3>Instrument candidates</h3><div id="segmentReview" class="segment-review" role="region" aria-label="Block review" hidden></div><div id="instrumentCandidates" class="candidate-list"></div><p id="instrumentCaveat" class="subtle"></p></div>
+        </section>
+        <section id="panel-guitar" class="inspector-panel" role="tabpanel" aria-labelledby="tab-guitar" tabindex="0" hidden>
+          <p class="passage-scope">For the whole passage</p>
+          <p class="inspector-empty">Harmonic ideas will appear after analysis.</p>
+          <div class="inspector-content" hidden><h3>Harmonic sketches</h3><p class="idea-label">Idea, not a detection</p><p class="subtle">Experimental pitch-class matches from a full mix. Fret shapes are playable standard-tuning suggestions, not a transcription.</p><div id="chordCandidates" class="chord-list"></div></div>
+          <label class="note-label">My chord correction <input id="chordCorrection" type="text" placeholder="What do you hear instead?"></label>
+        </section>
+        <section id="panel-arrange" class="inspector-panel" role="tabpanel" aria-labelledby="tab-arrange" tabindex="0" hidden>
+          <p class="passage-scope">For the whole passage</p>
+          <p class="inspector-empty">A creative arrangement idea will appear after analysis.</p>
+          <div class="inspector-content" hidden><h3>Arrange the contrast</h3><p class="idea-label">Idea, not a detection</p><p id="creativeIdea" class="idea"></p></div>
+          <label class="note-label">My arrangement notes <textarea id="arrangementNotes" rows="4" placeholder="Which layer changes here? What would you try?"></textarea></label>
+        </section>
+        <section id="panel-notes" class="inspector-panel" role="tabpanel" aria-labelledby="tab-notes" tabindex="0" hidden>
+          <p class="inspector-empty">Analyse a passage to export its findings with your notes and listening marks.</p>
+          <div class="inspector-content" hidden><h3>Listening notes</h3><p id="reviewTally" class="review-tally" hidden></p><p id="reviewCaveat" class="subtle" hidden>Your marks are your own listening judgement. They stay in this tab, are not sent anywhere, and are not used to train or score the model. Reloading clears them. Export the note to keep them.</p><p class="subtle export-note">Export keeps the analysed passage, findings, corrections, listening marks and EQ settings together. Audio is excluded.</p></div>
+        </section>
       </section>
-      
     </aside>
   </main>
 </body>
