@@ -26,6 +26,12 @@ export function formatTime(seconds) {
   return `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
 }
 
+export function blockAnnouncement(index, segment) {
+  const tail = 'selected. Marking controls are in the Instruments tab.';
+  if (!segment) return `Block ${index + 1} ${tail}`;
+  return `Block ${index + 1}, ${formatTime(segment.start_s)} to ${formatTime(segment.end_s)} ${tail}`;
+}
+
 export function measuredObservations(windows) {
   if (!Array.isArray(windows) || windows.length < 2) return [];
   let largest = null;
