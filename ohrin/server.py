@@ -1,7 +1,6 @@
 """Local-only HTTP entry point for the Ohrin passage workbench."""
 
 import json
-import mimetypes
 import os
 from pathlib import Path
 import tempfile
@@ -34,6 +33,21 @@ def analyze_upload(data: bytes, start: float, end: float) -> dict:
         return result
 
 
+CONTENT_TYPES = {
+    ".html": "text/html; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".mjs": "text/javascript; charset=utf-8",
+    ".json": "application/json; charset=utf-8",
+    ".svg": "image/svg+xml; charset=utf-8",
+    ".woff2": "font/woff2",
+}
+
+
+def content_type_for(path: str) -> str:
+    return CONTENT_TYPES.get(Path(path).suffix.lower(), "application/octet-stream")
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
@@ -53,9 +67,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404)
             return
         data = (WEB / FILES[path]).read_bytes()
-        content_type = "text/javascript" if path.endswith((".js", ".mjs")) else mimetypes.guess_type(FILES[path])[0]
         self.send_response(200)
-        self.send_header("Content-Type", f"{content_type or 'text/plain'}; charset=utf-8")
+        self.send_header("Content-Type", content_type_for(FILES[path]))
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
