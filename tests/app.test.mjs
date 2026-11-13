@@ -331,3 +331,11 @@ test('EQ note exports settings only and adds limitation only for nonflat bands',
 });
 import './lanes-model.test.mjs';
 import './instruments-lane.test.mjs';
+
+test('editing one field keeps the other bound exact, and swaps when start passes end', async () => {
+  const { selectionFromField } = await import('../web/state.mjs');
+  const sel = { start: 38.04, end: 44.06 };
+  assert.deepEqual(selectionFromField(sel, 'start', 40, 100), { start: 40, end: 44.06 });
+  assert.deepEqual(selectionFromField(sel, 'end', 50, 100), { start: 38.04, end: 50 });
+  assert.deepEqual(selectionFromField(sel, 'start', 60, 100), { start: 44.06, end: 60 });
+});

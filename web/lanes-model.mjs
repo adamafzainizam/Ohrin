@@ -25,3 +25,11 @@ export function notAnalysed(analysis) {
   if (!timeline) return [];
   return timeline.uncovered.map(({ start_s, end_s }) => ({ start_s, end_s }));
 }
+
+// Resize a canvas backbuffer only when its pixel size changes; resizing clears and reallocates it.
+export function sizeCanvas(canvas, widthPx, heightPx, ratio) {
+  const width = Math.round(widthPx * ratio), height = Math.round(heightPx * ratio);
+  if (canvas.width !== width) canvas.width = width;
+  if (canvas.height !== height) canvas.height = height;
+  return { width, height };
+}

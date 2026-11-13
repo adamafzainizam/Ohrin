@@ -62,3 +62,16 @@ test('notAnalysed lists uncovered stretches as start and end', () => {
   assert.ok(gaps[0].start_s >= 139);
   assert.deepEqual(notAnalysed(analysis), []);
 });
+
+test('sizeCanvas resizes only when the rounded pixel size changes', async () => {
+  const { sizeCanvas } = await import('../web/lanes-model.mjs');
+  let writes = 0;
+  const canvas = { _w: 0, _h: 0, get width() { return this._w; }, set width(v) { writes += 1; this._w = v; },
+    get height() { return this._h; }, set height(v) { writes += 1; this._h = v; } };
+  assert.deepEqual(sizeCanvas(canvas, 100.4, 36, 1.5), { width: 151, height: 54 });
+  assert.equal(writes, 2);
+  sizeCanvas(canvas, 100.4, 36, 1.5);
+  assert.equal(writes, 2, 'unchanged size does not touch the canvas');
+  sizeCanvas(canvas, 120, 36, 1.5);
+  assert.equal(writes, 3);
+});

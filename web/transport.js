@@ -54,7 +54,18 @@ export function createTransport({ player, store, announce, resume = async () => 
 
   player.addEventListener('play', () => startLoop());
   player.addEventListener('pause', stopLoop);
-  player.addEventListener('ended', stopLoop);
+  // A selection that ends at the track end never reaches a timeupdate past its end: the element
+  // stops at EOF, already paused. Handle that natural end here. A completed block range does not loop.
+  player.addEventListener('ended', () => {
+    stopLoop();
+    const wasRange = rangeEnd !== null;
+    rangeEnd = null;
+    if (wasRange || !isLooping()) return;
+    const { selection } = store.get();
+    if (!shouldLoop(player.currentTime, selection, true)) return;
+    player.currentTime = selection.start;
+    startPlayback();
+  });
   player.addEventListener('timeupdate', () => {
     if (rangeEnd !== null) { checkRange(); if (player.paused) emitFrame(); return; }
     if (player.paused) { emitFrame(); return; }

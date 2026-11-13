@@ -86,3 +86,45 @@ test('completed block playback stays at its end on later paused timeupdates', as
   player.emit('timeupdate');
   assert.equal(player.currentTime, 20);
 });
+
+test('loop restarts at the selection start when the selection ends at the track end', async t => {
+  stubRaf(t);
+  globalThis.requestAnimationFrame = () => 1;
+  const player = fakePlayer();
+  const store = createStore({ selection: { start: 200, end: 240 } });
+  let looping = true;
+  const transport = createTransport({ player, store, announce() {}, isLooping: () => looping });
+  player.currentTime = 200;
+  await transport.play();
+  player.calls.length = 0;
+  player.currentTime = 240; player.paused = true; // the element is already paused at EOF
+  player.emit('ended');
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(player.currentTime, 200);
+  assert.deepEqual(player.calls, ['play']);
+  // Loop off: stays at the end.
+  player.pause(); player.calls.length = 0; looping = false;
+  player.currentTime = 240; player.paused = true;
+  player.emit('ended');
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(player.currentTime, 240);
+  assert.deepEqual(player.calls, []);
+});
+
+test('ended does not loop a completed block range or a paused seek', async t => {
+  stubRaf(t);
+  globalThis.requestAnimationFrame = () => 1;
+  const player = fakePlayer();
+  const store = createStore({ selection: { start: 200, end: 240 } });
+  const transport = createTransport({ player, store, announce() {}, isLooping: () => true });
+  await transport.playRange(235, 240);
+  player.calls.length = 0;
+  player.currentTime = 240; player.paused = true;
+  player.emit('ended');
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(player.currentTime, 240);
+  assert.deepEqual(player.calls, []);
+  transport.seek(10); // paused seek: no ended event, no loop
+  player.emit('timeupdate');
+  assert.equal(player.currentTime, 10);
+});
