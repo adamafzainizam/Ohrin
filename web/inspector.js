@@ -22,8 +22,8 @@ export function createInspector({ store, announce, transport }) {
     tab.addEventListener('click', () => activate(name));
     tab.addEventListener('keydown', event => {
       const current = names.indexOf(name);
-      const next = { ArrowRight: (current + 1) % names.length, ArrowDown: (current + 1) % names.length,
-        ArrowLeft: (current + names.length - 1) % names.length, ArrowUp: (current + names.length - 1) % names.length,
+      const next = { ArrowRight: (current + 1) % names.length,
+        ArrowLeft: (current + names.length - 1) % names.length,
         Home: 0, End: names.length - 1 }[event.key];
       if (next === undefined) return;
       event.preventDefault(); activate(names[next]); $(`tab-${names[next]}`).focus();
