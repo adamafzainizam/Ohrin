@@ -324,3 +324,4 @@ test('EQ note exports settings only and adds limitation only for nonflat bands',
   const walk=o=>{for(const [key,value] of Object.entries(o||{})){assert.ok(!['audio','samples','spectrum','solo'].includes(key));if(value&&typeof value==='object')walk(value);}};
   walk(shaped);assert.equal(shaped.eq.bands[1].gain_db,6);
 });
+import './lanes-model.test.mjs';
