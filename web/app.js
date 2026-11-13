@@ -197,8 +197,8 @@ $('analyzeButton').addEventListener('click', async () => {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Analysis failed.');
     if (settle().stale) return;
-    store.set('review', { review: pruneReview(reconcileReview(store.get().review, reviewKey(file, result.passage)), result.instruments) });
-    store.set('analysis', { analysis: result, selectedBlock: null });
+    const review = pruneReview(reconcileReview(store.get().review, reviewKey(file, result.passage)), result.instruments);
+    store.set('analysis', { analysis: result, review, selectedBlock: null });
   } catch (error) {
     if (!settle().stale) setText('selectionLabel', error.message);
   } finally {

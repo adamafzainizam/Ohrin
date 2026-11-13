@@ -23,46 +23,46 @@ export function createTransport({ player, store, announce, resume = async () => 
     if (rangeEnd !== null && player.currentTime >= rangeEnd) { rangeEnd = null; playGeneration++; player.pause(); }
   }
 
-  async function play() {
+  async function startPlayback() {
     const token = ++playGeneration; playPending = true;
     try { await resume(); if (token !== playGeneration) return; await player.play(); }
     catch (error) { if (token === playGeneration) announce(error.message); }
     finally { if (token === playGeneration) playPending = false; }
   }
+  function play() { rangeEnd = null; return startPlayback(); }
   function pause() { playGeneration++; playPending = false; rangeEnd = null; player.pause(); }
   // Drop any in-flight play request without pausing (used when a new file loads).
   function cancel() { playGeneration++; playPending = false; rangeEnd = null; }
   async function playRange(start_s, end_s) {
-    rangeEnd = null;
     player.currentTime = start_s;
     rangeEnd = end_s;
-    await play();
+    await startPlayback();
   }
   function toggle() {
     const { selection } = store.get();
-    if (playPending) { playGeneration++; playPending = false; player.pause(); return; }
+    if (playPending) { pause(); return; }
     if (player.paused) {
       if (player.currentTime >= selection.end || player.currentTime < selection.start) player.currentTime = selection.start;
       play();
-    } else { playGeneration++; player.pause(); }
+    } else pause();
   }
   function onFrame(fn) {
     frameFns.push(fn);
     return () => { const i = frameFns.indexOf(fn); if (i >= 0) frameFns.splice(i, 1); };
   }
-  function seek(t) { player.currentTime = t; }
+  function seek(t) { rangeEnd = null; player.currentTime = t; }
 
   player.addEventListener('play', () => startLoop());
-  player.addEventListener('pause', () => { stopLoop(); emitFrame(); });
-  player.addEventListener('ended', () => { stopLoop(); emitFrame(); });
-  // A seek while paused still moves the cursor and label, as timeupdate did before.
-  player.addEventListener('seeked', () => { if (player.paused) emitFrame(); });
+  player.addEventListener('pause', stopLoop);
+  player.addEventListener('ended', stopLoop);
   player.addEventListener('timeupdate', () => {
-    if (rangeEnd !== null) { checkRange(); return; }
+    if (rangeEnd !== null) { checkRange(); if (player.paused) emitFrame(); return; }
     const { selection } = store.get();
     const loop = isLooping();
     if (shouldLoop(player.currentTime, selection, loop)) player.currentTime = selection.start;
     else if (shouldStop(player.currentTime, selection, loop)) { player.pause(); player.currentTime = selection.end; }
+    // While paused (seek, new file load) timeupdate is the only signal, so redraw here as before.
+    if (player.paused) emitFrame();
   });
 
   // DOM wiring for the transport controls; separate so the core runs without a DOM.
