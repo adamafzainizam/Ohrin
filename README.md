@@ -63,7 +63,7 @@ In the inspector, Left and Right (or Up and Down) move between tabs, and Home an
 
 Theme: the System, Light and Dark buttons set the colour theme. They are in the top bar from 1280 px wide and inside the More menu below that. System follows the operating system, and an explicit choice is remembered in the browser's local storage.
 
-Privacy: the server listens on 127.0.0.1 only and has no option to change that. The page sends audio only to that local server, for analysis, and loads no remote scripts, fonts or services. Playback uses a local object URL.
+Privacy: the server listens on 127.0.0.1 only and has no option to change that. It rejects requests for other hosts and cross-origin posts. The page sends audio only to that local server, for analysis, and loads no remote scripts, fonts or services. Playback uses a local object URL.
 
 ## Tests
 

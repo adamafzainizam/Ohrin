@@ -61,6 +61,33 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass
 
+    def end_headers(self):
+        self.send_header("X-Content-Type-Options", "nosniff")
+        super().end_headers()
+
+    def _allowed_hosts(self):
+        port = self.server.server_address[1]
+        return {f"127.0.0.1:{port}", f"localhost:{port}"}
+
+    def _host_ok(self):
+        host = self.headers.get("Host")
+        return host is not None and host.lower() in self._allowed_hosts()
+
+    def _origin_ok(self):
+        origin = self.headers.get("Origin")
+        if origin is None:
+            return True
+        return origin.lower() in {f"http://{h}" for h in self._allowed_hosts()}
+
+    def _reject_host(self):
+        body = b"Forbidden host."
+        self.send_response(403)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
     def _json(self, status, payload):
         body = json.dumps(payload, allow_nan=False).encode()
         self.send_response(status)
@@ -71,6 +98,9 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        if not self._host_ok():
+            self._reject_host()
+            return
         path = urlsplit(self.path).path
         if path not in FILES:
             self.send_error(404)
@@ -84,9 +114,15 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_POST(self):
+        if not self._host_ok():
+            self._reject_host()
+            return
         url = urlsplit(self.path)
         if url.path != "/api/analyze":
             self.send_error(404)
+            return
+        if not self._origin_ok():
+            self._json(403, {"error": "Cross-origin requests are not allowed."})
             return
         try:
             params = parse_qs(url.query)
