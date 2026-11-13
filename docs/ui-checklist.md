@@ -115,4 +115,31 @@ Each cell covers the common, zoom, inspector-tabs, three-level axis, drop/playhe
 
 Additional checks: waveform canvas width/height is not reset per playback frame; analysis builds the block strip once (four nodes, not eight); stale opacity affects fill only (0.4), while glyphs/labels/radios/banner stay 1 and Play/Export stay enabled; Not analysed uses plain fill.
 
-Final automated suites: 95 Node tests pass; 252 Python tests pass. No known failing application check remains. Unverified: physical touch, screen-reader speech, human listening/audio output, Firefox/Safari/WebKitGTK, Windows/macOS, CPU/memory on long tracks and literal first-paint flash timing. Task 15 final review remains Claude's work.
+Final automated suites at that point: 95 Node tests pass; 252 Python tests pass (superseded by the fix-wave counts below). No known failing application check remains. Unverified: physical touch, screen-reader speech, human listening/audio output, Firefox/Safari/WebKitGTK, Windows/macOS, CPU/memory on long tracks and literal first-paint flash timing. Task 15 final review remains Claude's work.
+
+
+## Final fix wave validation: 2026-11-13, Claude (Sonnet implementer)
+
+Chromium via playwright-cli, session `ohrin-fix`, worktree server on port 8792, generated 240 s tone (two copies), a generated 6 s tone, a 16-byte non-audio file named `.wav`, and the synthetic fixture only. Scripted with `run-code`; viewport 1280 unless stated. Session and server were closed afterwards.
+
+Automated suites after the wave: 112 Node tests pass (`node tests/app.test.mjs`); 252 Python tests pass (`unittest discover`). These counts were observed by running the suites, not carried over.
+
+| Finding | Check | Result |
+|---|---|---|
+| F1 | Load tone, analyse with the fixture (4 blocks, 4 table rows, caption), then load a second tone with `decodeAudioData` delayed 1.5 s. During and after the decode: 0 blocks, 0 table rows, empty hidden caption, strip and instrument lanes hidden. | Pass |
+| F1, F14 | Same start, then load a non-audio `.wav`: 'The browser could not play this file.', all seven controls and zoom buttons disabled, lanes hidden, empty state shown, readout 00:00.0. Valid file with `decodeAudioData` rejecting: same, with the decode message. Loading a good file afterwards re-enabled everything. | Pass |
+| F1 | An old file's decode error not overwriting the new file's status. | Not driven in a browser (needs two overlapping loads); covered only by the `store.get().file === chosen` guard in `loadFile`. |
+| F2 | Instruments tab after analysis: `.provenance-label` reads "Model output, uncertain" and has a non-zero box. | Pass |
+| F3 | 6 s tone, selection 3 to 6 s (ends at the track end), Loop on, muted playback for 7.5 s: still playing at 4.4 s after two `ended` events, so it looped. Loop off from 3 s: stopped at 6.0 s paused. | Pass |
+| F4 | Play at 200 s, Ctrl-wheel zoom to 116.7 to 123.3 s, Shift-wheel pan to 0 to 6.6 s with the playhead far outside, then `+` from the keyboard: view 1.1 to 5.5 s (stays inside the old view). | Pass |
+| F5 | Counting `clearRect` calls: 10 zoom clicks in one task and a single click each give 3 (waveform, ruler, energy, one frame). Canvas `width` setter calls stay 0 across repeated zooms at an unchanged size. | Pass (proxy: draw calls counted, not frame times) |
+| F6 | Pure test only (`selectionFromField`). Browser: fields edited one at a time keep the stale banner behaviour correct (hidden when restored to 158.4, shown at 150). A fractional drag-then-edit was not driven. | Pass (unit) / not checked (drag-then-edit) |
+| F7 | Track when already fitted, and zoom at the clamp: no live-region message. Programmatic focus restore and window refocus were not driven (window refocus ordering is assumed, not observed). | Pass (no-op cases) / not checked (refocus) |
+| F8 | After a click on block 3 the strip tab stops are -1,-1,0,-1; after a click on a lane cell for block 1 they are 0,-1,-1,-1. | Pass |
+| F9 | `role="group"` and `aria-keyshortcuts` are asserted in the contract test; zoom keys are named in the waveform caption. Screen-reader name exposure not checked. | Pass (markup) |
+| F10, F11 | MutationObserver on `#liveStatus` (two observers were attached by the harness, so entries doubled; one announcement per action): the stale banner text was announced when End changed 158.4 to 150, and the banner cleared again at 158.4. Joining is covered by the announcer unit test. | Pass (proxy: DOM text, not speech) |
+| F12 | Focus on a theme button at 1400 px, narrow to 1000 px: focus lands on the More button (the control is inside the closed menu). Open More, focus the theme button, widen to 1400: focus stays on that button. | Pass |
+| F17, F18 | Copy covered by contract tests. Single render on analysis completion is by construction (view set first, then one full render that cancels the pending frame); not separately counted in a browser. | Pass (test) / not measured (F18) |
+| Rows 17, 20 to 23 | `scrollWidth - clientWidth` is 0 at 390, 1024, 1280. Playhead and block start 1 px apart (a constant 1 px playhead offset) at three zoom levels at the centre and at two levels off-centre. Selection fields unchanged by zoom. `+` and `-` typed into the notes field and Start do not zoom or announce. Four rapid zoom clicks give one announcement. | Pass |
+
+One wording note for the Measured row: the earlier window refocus handling (`quietFocus`) relies on the window `focus` event arriving before the element focus event in the same task. That was not observed.

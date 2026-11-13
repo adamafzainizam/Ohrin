@@ -371,18 +371,25 @@ observeCanvasHost($('ruler'));
 onInvalidate(() => renderLanes());
 
 // Speed, EQ, Export and Theme sit in the top bar from 1280 px and inside More below. One set of nodes moves between the two.
+let lastToolFocus = null;
+$('toolGroup').addEventListener('focusin', event => { lastToolFocus = event.target; });
+// A blur while the control is still rendered is the user leaving it; a silent drop from a hidden slot is not.
+$('toolGroup').addEventListener('focusout', event => { if (event.target.getClientRects().length) lastToolFocus = null; });
 const wideQuery = window.matchMedia('(min-width: 1280px)');
 function placeTools() {
   const wide = wideQuery.matches;
   const group = $('toolGroup');
   const target = wide ? $('toolSlot') : $('moreBody');
+  $('topBar').classList.toggle('wide', wide);
   if (group.parentElement !== target) {
     // Reparenting a focused control drops focus to the body; put it back.
-    const focused = group.contains(document.activeElement) ? document.activeElement : null;
+    // The CSS change that hides the old slot silently drops focus to the body before this runs, so fall back to the last tool focus.
+    const recent = document.activeElement === document.body && lastToolFocus?.isConnected ? lastToolFocus : null;
+    const focused = group.contains(document.activeElement) ? document.activeElement : recent;
     target.append(group);
-    focused?.focus({ preventScroll: true });
+    // Inside the closed More menu the control cannot hold focus; hand it to the menu button instead.
+    if (focused) (!wide && !$('moreMenu').open ? $('moreMenu').querySelector('summary') : focused).focus({ preventScroll: true });
   }
-  $('topBar').classList.toggle('wide', wide);
   if (wide) $('moreMenu').open = false;
 }
 wideQuery.addEventListener('change', placeTools);
