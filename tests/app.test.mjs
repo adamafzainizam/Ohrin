@@ -1,5 +1,6 @@
 import './contracts.test.mjs';
 import './eq.test.mjs';
+import './fixture.test.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
