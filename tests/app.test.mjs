@@ -339,3 +339,10 @@ test('editing one field keeps the other bound exact, and swaps when start passes
   assert.deepEqual(selectionFromField(sel, 'end', 50, 100), { start: 38.04, end: 50 });
   assert.deepEqual(selectionFromField(sel, 'start', 60, 100), { start: 44.06, end: 60 });
 });
+
+test('block announcement includes the segment time range, with a fallback when the segment is missing', async () => {
+  const { blockAnnouncement } = await import('../web/state.mjs');
+  assert.equal(blockAnnouncement(2, { start_s: 65, end_s: 130.4 }),
+    'Block 3, 01:05 to 02:10 selected. Marking controls are in the Instruments tab.');
+  assert.equal(blockAnnouncement(0, undefined), 'Block 1 selected. Marking controls are in the Instruments tab.');
+});

@@ -59,7 +59,7 @@ Zoom and pan the lanes:
 - In the overview, click to centre the view there, or drag the view box to pan.
 - During playback the view follows the playhead until you zoom or pan, and resumes when you press play again.
 
-In the inspector, Left and Right (or Up and Down) move between tabs, and Home and End jump to the first and last.
+In the inspector, Left and Right move between tabs, and Home and End jump to the first and last.
 
 Theme: the System, Light and Dark buttons set the colour theme. They are in the top bar from 1280 px wide and inside the More menu below that. System follows the operating system, and an explicit choice is remembered in the browser's local storage.
 

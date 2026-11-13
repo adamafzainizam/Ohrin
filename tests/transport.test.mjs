@@ -173,3 +173,29 @@ test('a seek inside the selection during selection playback still loops at the t
   assert.equal(player.currentTime, 200);
   assert.deepEqual(player.calls, ['play']);
 });
+
+test('a seek right after play, before the element starts, keeps the end-of-track loop', async t => {
+  stubRaf(t);
+  globalThis.requestAnimationFrame = () => 1;
+  const player = fakePlayer();
+  let release;
+  const immediatePlay = player.play;
+  player.play = function () {
+    player.play = immediatePlay; // only the first play stays pending
+    return new Promise(resolve => { release = () => { this.paused = false; this.calls.push('play'); this.emit('play'); resolve(); }; });
+  };
+  const store = createStore({ selection: { start: 200, end: 240 } });
+  const transport = createTransport({ player, store, announce() {}, isLooping: () => true });
+  player.currentTime = 200;
+  const started = transport.play();
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  assert.equal(player.paused, true); // play is still pending
+  transport.seek(220);
+  release(); await started;
+  player.calls.length = 0;
+  player.currentTime = 240; player.paused = true;
+  player.emit('ended');
+  for (let i = 0; i < 5; i++) await Promise.resolve();
+  assert.equal(player.currentTime, 200);
+  assert.deepEqual(player.calls, ['play']);
+});

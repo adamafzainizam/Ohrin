@@ -11,7 +11,7 @@ import { createTransport } from './transport.js';
 import { createInspector } from './inspector.js';
 import { fit, formatTenths, zoomAt, pan, followPage, xToTime } from './timeline.mjs';
 import { pickAudioFile, zoomKeyAllowed, zoomFactorFromWheel, wheelIntent, zoomAnchor, createCoalescer, createAnnouncer } from './input-rules.mjs';
-import { clampSelection, selectionFromField, formatTime, reviewKey, reconcileReview, pruneReview,
+import { clampSelection, selectionFromField, formatTime, blockAnnouncement, reviewKey, reconcileReview, pruneReview,
   settleRequest, buildPassageNote } from './state.mjs';
 
 const $ = id => document.getElementById(id);
@@ -51,7 +51,7 @@ const actions = {
     if (window.matchMedia('(max-width: 1279px)').matches && (box.top >= window.innerHeight || box.bottom <= 0)) {
       $('inspector').scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block: 'start' });
     }
-    announce(`Block ${index + 1} selected. Marking controls are in the Instruments tab.`);
+    announce(blockAnnouncement(index, store.get().analysis?.instruments?.segments?.[index]));
   },
 };
 overviewLane.mount($('overview'), actions);

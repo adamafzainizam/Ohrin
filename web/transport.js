@@ -55,7 +55,7 @@ export function createTransport({ player, store, announce, resume = async () => 
     rangeEnd = null;
     // A seek while selection playback runs keeps looping, unless it lands outside the selection.
     const { selection } = store.get();
-    if (player.paused || t < selection.start || t > selection.end) selectionPlaying = false;
+    if ((player.paused && !playPending) || t < selection.start || t > selection.end) selectionPlaying = false;
     player.currentTime = t;
   }
 
