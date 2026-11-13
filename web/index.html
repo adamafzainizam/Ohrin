@@ -11,6 +11,7 @@
   <script type="module" src="/app.js"></script>
 </head>
 <body>
+  <!-- The inline SVG icons in this page are Phosphor icons (MIT). See web/icons/LICENSE. -->
   <header id="topBar" class="topbar">
     <h1 class="brand">Ohrin</h1>
     <div class="tb-file">
@@ -54,7 +55,7 @@
       </div>
       <p id="staleBanner" class="stale-banner" hidden></p>
       <div id="waveWrap" class="wave-wrap" hidden>
-        <div id="laneStack" class="lane-stack" tabindex="0" aria-label="Time aligned audio lanes">
+        <div id="laneStack" class="lane-stack" tabindex="0" role="group" aria-label="Time aligned audio lanes" aria-keyshortcuts="+ = -">
           <div class="lane-row ruler-row"><div class="lane-label">Time</div><div class="ruler-content"><div class="zoom-controls" role="group" aria-label="Timeline view"><button id="zoomOut" type="button" aria-label="Zoom out" disabled>−</button><button id="zoomIn" type="button" aria-label="Zoom in" disabled>+</button><button id="fitPassage" type="button" aria-label="Fit passage" disabled>Passage</button><button id="fitTrack" type="button" aria-label="Fit track" disabled>Track</button></div><canvas id="ruler" class="lane-plot" aria-label="Track time ruler"></canvas></div></div>
           <div class="lane-row"><div class="lane-label">Waveform</div><canvas id="waveform" class="lane-plot" height="120" aria-label="Audio waveform. Drag to select a passage."></canvas></div>
           <div class="lane-row"><div class="lane-label">Measured</div><canvas id="energyChart" class="lane-plot" height="64" aria-label="Measured RMS audio level on the track time axis"></canvas></div>
@@ -63,7 +64,7 @@
           </div>
           <div class="playhead-axis"><div id="playhead" class="playhead" aria-hidden="true" hidden></div></div>
         </div>
-        <div class="wave-caption"><span>Drag across the waveform to select</span><span id="durationLabel">00:00</span></div>
+        <div class="wave-caption"><span>Drag across the waveform to select. With the lanes focused, + and - zoom.</span><span id="durationLabel">00:00</span></div>
         <p id="energyCaption" class="subtle">RMS dBFS from the mixed recording. Higher means louder; this is not an instrument stem.</p>
         <div id="blockStrip" class="block-strip" role="group" aria-label="Blocks. Arrow keys move between blocks; Enter selects one to mark."></div>
         <div class="visually-hidden"><table id="timelineTable"><caption>Instrument model scores per segment (uncertain model output)</caption><thead></thead><tbody></tbody></table></div>
@@ -94,7 +95,7 @@
         </section>
         <section id="panel-instruments" class="inspector-panel" role="tabpanel" aria-labelledby="tab-instruments" tabindex="0" hidden>
           <p class="inspector-empty">Uncertain instrument candidates and block marking controls will appear after analysis.</p>
-          <div class="inspector-content" hidden><h3>Instrument candidates</h3><div id="segmentReview" class="segment-review" role="region" aria-label="Block review" hidden></div><div id="instrumentCandidates" class="candidate-list"></div><p id="instrumentCaveat" class="subtle"></p></div>
+          <div class="inspector-content" hidden><h3>Instrument candidates</h3><p class="provenance-label">Model output, uncertain</p><div id="segmentReview" class="segment-review" role="region" aria-label="Block review" hidden></div><div id="instrumentCandidates" class="candidate-list"></div><p id="instrumentCaveat" class="subtle"></p></div>
         </section>
         <section id="panel-guitar" class="inspector-panel" role="tabpanel" aria-labelledby="tab-guitar" tabindex="0" hidden>
           <p class="passage-scope">For the whole passage</p>

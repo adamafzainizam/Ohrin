@@ -83,7 +83,7 @@ export function createInspector({ store, announce, transport }) {
     box.hidden = !available || !info.segments?.length;
     if (!box.hidden) {
       if (!seg) {
-        const p = document.createElement('p'); p.className = 'subtle'; p.textContent = 'Select a block in the timeline to mark what you hear in it.'; box.append(p);
+        const p = document.createElement('p'); p.className = 'subtle'; p.textContent = 'Select a block below the lanes to mark what you hear in it.'; box.append(p);
       } else {
         const h = document.createElement('h4');
         h.textContent = `Segment ${formatTime(seg.start_s)}–${formatTime(seg.end_s)} (≈${(seg.end_s - seg.start_s).toFixed(1)} s block)`;
@@ -134,7 +134,6 @@ export function createInspector({ store, announce, transport }) {
     }
     const strongest = remarks[0] || 'Compare the first and last part of the selection.';
     setText('creativeIdea', `Try rebuilding the passage with the same overall level contrast. ${strongest} Change the timing or the layer that carries it to make the idea your own.`);
-    setText('energyCaption', 'RMS dBFS from the mixed recording. Higher on the chart means louder; this is not an instrument stem.');
     renderReview();
   }
 

@@ -177,6 +177,7 @@ body.dropping .lane-area{outline:2px solid var(--accent);outline-offset:4px;bord
 .inspector-panel h3{font-size:18px;margin:8px 0}
 .passage-scope,.inspector-empty{color:var(--text-muted)}
 .passage-scope{font-size:12px;margin:0 0 10px}
+.provenance-label{border:1px dashed var(--line-strong);padding:4px 8px;font-size:12px;display:inline-block;margin:0 0 8px}
 .idea-label{border:1px dashed var(--line-strong);padding:4px 8px;font-size:12px;display:inline-block}
 .inspector{padding:12px;background:var(--surface-1);border:1px solid var(--line);border-radius:var(--r-panel)}
 .results>h2{font-size:18px;margin:0}

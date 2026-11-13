@@ -130,3 +130,22 @@ test('stale findings have a separate banner without disabling note controls', ()
   assert.equal([...indexHtml.matchAll(/id="chordCorrection"/g)].length, 1);
   assert.equal([...indexHtml.matchAll(/id="arrangementNotes"/g)].length, 1);
 });
+
+test('the Instruments panel carries the model provenance label', () => {
+  const panel = indexHtml.match(/<section id="panel-instruments"[\s\S]*?<\/section>/);
+  assert.ok(panel, 'panel-instruments exists');
+  assert.match(panel[0], /<p class="provenance-label">Model output, uncertain<\/p>/);
+});
+
+test('the lane stack is a named group with its zoom shortcuts declared', () => {
+  const tag = indexHtml.match(/<div id="laneStack"[^>]*>/)[0];
+  assert.match(tag, /role="group"/);
+  assert.match(tag, /aria-label="[^"]+"/);
+  assert.match(tag, /aria-keyshortcuts="\+ = -"/);
+});
+
+test('the energy caption and block hint have one source and match the layout', () => {
+  assert.doesNotMatch(read(join(WEB, 'inspector.js')), /energyCaption/);
+  assert.doesNotMatch(read(join(WEB, 'inspector.js')), /in the timeline/);
+  assert.match(read(join(WEB, 'inspector.js')), /Select a block below the lanes/);
+});
