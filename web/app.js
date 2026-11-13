@@ -3,6 +3,8 @@ import { initTheme, getPalette, onInvalidate, observeCanvasHost } from './theme.
 import { createStore, fileLoaded } from './store.mjs';
 import { createTransport } from './transport.js';
 import { createInspector } from './inspector.js';
+import { formatTenths } from './timeline.mjs';
+import { pickAudioFile } from './input-rules.mjs';
 import { clampSelection, formatTime, emptyReview, reviewKey, reconcileReview, pruneReview,
   settleRequest, dragExceeded, isPrimaryPress, primaryButtonHeld, resolveDrag, buildPassageNote } from './state.mjs';
 
@@ -23,10 +25,28 @@ transport.bindControls({ playButton: $('playButton'), speed: $('speed') });
 const inspector = createInspector({ store, announce, transport, fitCanvas });
 store.subscribe('analysis', () => inspector.render('analysis'));
 store.subscribe('review', () => inspector.render('review'));
-transport.onFrame(t => { setText('timeLabel', formatTime(t)); drawWaveform(); });
+const ICON_PLAY = '<svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M232.4,114.49,88.32,26.35a16,16,0,0,0-16.2-.3A15.86,15.86,0,0,0,64,39.87V216.13A15.94,15.94,0,0,0,80,232a16.07,16.07,0,0,0,8.36-2.35L232.4,141.51a15.81,15.81,0,0,0,0-27ZM80,215.94V40l143.83,88Z"/></svg>';
+const ICON_PAUSE = '<svg viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,32H160a16,16,0,0,0-16,16V208a16,16,0,0,0,16,16h40a16,16,0,0,0,16-16V48A16,16,0,0,0,200,32Zm0,176H160V48h40ZM96,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16H96a16,16,0,0,0,16-16V48A16,16,0,0,0,96,32Zm0,176H56V48H96Z"/></svg>';
+// Registered after transport.bindControls, so these icons replace its text glyphs.
+player.addEventListener('play', () => { $('playButton').innerHTML = ICON_PAUSE; });
+player.addEventListener('pause', () => { $('playButton').innerHTML = ICON_PLAY; });
+function updateReadout(t) {
+  const d = Number.isFinite(player.duration) ? player.duration : 0;
+  setText('timeReadout', `${formatTenths(t)} / ${formatTenths(d)}`);
+}
+transport.onFrame(t => { updateReadout(t); drawWaveform(); });
+function updateExport() {
+  const ready = !!store.get().analysis;
+  const button = $('exportButton');
+  button.disabled = !ready;
+  button.setAttribute('aria-disabled', String(!ready));
+  $('exportReason').hidden = ready;
+}
+store.subscribe('analysis', updateExport);
+updateExport();
 
 function setText(id, value) { $(id).textContent = value; }
-function resetAnalyzeButton() { $('analyzeButton').innerHTML = 'Analyse passage <span>↗</span>'; }
+function resetAnalyzeButton() { $('analyzeButton').textContent = 'Analyse passage'; }
 function announce(text) {
   // Clear first so an identical repeated message is announced again.
   const region = $('liveStatus');
@@ -117,6 +137,7 @@ async function loadFile(chosen) {
   clearPassageFindings();
   objectUrl = URL.createObjectURL(chosen);
   setText('fileName', chosen.name);
+  updateExport();
   setText('selectionLabel', 'Reading audio…');
   $('analyzeButton').disabled = true;
   try {
@@ -129,7 +150,9 @@ async function loadFile(chosen) {
     for (const id of ['playButton', 'startTime', 'endTime', 'speed', 'loop', 'analyzeButton', 'eqDisclosure']) $(id).disabled = false;
     $('startTime').max = player.duration;
     $('endTime').max = player.duration;
+    $('emptyState').hidden = true; $('waveWrap').hidden = false;
     setText('durationLabel', formatTime(player.duration));
+    updateReadout(player.currentTime || 0);
     store.set('view', fileLoaded(store.get(), chosen, player.duration));
     updateSelection(0, Math.min(30, player.duration));
     waveform = await makeWaveform(chosen);
@@ -138,10 +161,31 @@ async function loadFile(chosen) {
 }
 
 fileInput.addEventListener('change', () => loadFile(fileInput.files[0]));
-const dropZone = $('dropZone');
-for (const type of ['dragenter', 'dragover']) dropZone.addEventListener(type, event => { event.preventDefault(); dropZone.classList.add('dragging'); });
-for (const type of ['dragleave', 'drop']) dropZone.addEventListener(type, event => { event.preventDefault(); dropZone.classList.remove('dragging'); });
-dropZone.addEventListener('drop', event => loadFile(event.dataTransfer.files[0]));
+$('openButton').addEventListener('click', () => fileInput.click());
+$('emptyOpen').addEventListener('click', () => fileInput.click());
+
+// Window-level drop: any audio file loads; drops on a file input (such as the EQ import) keep their own behaviour.
+const onFileInput = event => !!(event.target.closest && event.target.closest('input[type=file]'));
+const hasFiles = event => [...(event.dataTransfer?.types || [])].includes('Files');
+window.addEventListener('dragover', event => {
+  if (onFileInput(event)) return;
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+  if (hasFiles(event)) document.body.classList.add('dropping');
+});
+window.addEventListener('dragleave', event => { if (!event.relatedTarget) document.body.classList.remove('dropping'); });
+window.addEventListener('drop', event => {
+  if (onFileInput(event)) return;
+  event.preventDefault();
+  document.body.classList.remove('dropping');
+  if (!hasFiles(event)) return;
+  const picked = pickAudioFile([...event.dataTransfer.files]);
+  if (picked) loadFile(picked);
+  else {
+    const message = 'That is not an audio file. Drop an mp3, wav, flac, ogg or m4a file.';
+    setText('selectionLabel', message); announce(message);
+  }
+});
 
 function timeAtPointer(event) {
   const box = canvas.getBoundingClientRect();
@@ -225,3 +269,25 @@ observeCanvasHost(canvas);
 observeCanvasHost($('energyChart'));
 onInvalidate(() => { drawWaveform(); inspector.render('layout'); });
 drawWaveform();
+
+// Speed, EQ, Export and Theme sit in the top bar from 1280 px and inside More below. One set of nodes moves between the two.
+const wideQuery = window.matchMedia('(min-width: 1280px)');
+function placeTools() {
+  const wide = wideQuery.matches;
+  const group = $('toolGroup');
+  const target = wide ? $('toolSlot') : $('moreBody');
+  if (group.parentElement !== target) target.append(group);
+  $('topBar').classList.toggle('wide', wide);
+  if (wide) $('moreMenu').open = false;
+}
+wideQuery.addEventListener('change', placeTools);
+placeTools();
+const more = $('moreMenu');
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && more.open) { more.open = false; more.querySelector('summary').focus(); }
+});
+document.addEventListener('click', event => {
+  if (!more.open) return;
+  // Close on an outside click and after EQ or Export, so the opened panel or download is not hidden behind the menu.
+  if (!more.contains(event.target) || event.target.closest('#eqDisclosure, #exportButton')) more.open = false;
+});

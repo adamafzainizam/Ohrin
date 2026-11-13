@@ -8,7 +8,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const WEB = join(ROOT, 'web');
 const read = path => readFileSync(path, 'utf8');
 
-// IDs the scripts build from lists (web/app.js:133 and web/eq-ui.js:427).
+// IDs the scripts build from lists (the enable-on-load list in web/app.js and the EQ editor in web/eq-ui.js).
 // Later tasks that add computed IDs append to this list.
 export const COMPUTED_IDS = [
   'playButton', 'startTime', 'endTime', 'speed', 'loop', 'analyzeButton', 'eqDisclosure',
@@ -87,4 +87,19 @@ test('every referenced asset is served', () => {
     if (!served.has(path)) missing.push(`${path} (from ${relative(ROOT, file)})`);
   }
   assert.deepEqual(missing, [], `referenced but not in FILES: ${missing.join('; ')}`);
+});
+
+test('app shell regions exist and the landing page is gone', () => {
+  const ids = new Set([...indexHtml.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]));
+  for (const id of ['topBar', 'moreMenu', 'selectionBar', 'laneArea', 'inspector', 'emptyState', 'timeReadout',
+    'audioFile', 'openButton', 'exportButton', 'exportReason', 'eqDisclosure', 'eqPanel', 'selectionLabel']) {
+    assert.ok(ids.has(id), `missing #${id}`);
+  }
+  for (const gone of ['dropZone', 'timeLabel', 'private-pill', 'class="hero"', 'kicker', '<footer']) {
+    assert.ok(!indexHtml.includes(gone), `${gone} should be removed`);
+  }
+  assert.ok(!indexHtml.includes('—'), 'no em-dashes in markup');
+  assert.match(indexHtml, /<details id="moreMenu"[^>]*>\s*<summary>More<\/summary>/);
+  assert.match(indexHtml, /Open an audio file/);
+  assert.match(indexHtml, /Audio stays on this machine/);
 });

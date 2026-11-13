@@ -11,7 +11,7 @@ class ServerBoundaryTests(unittest.TestCase):
     def test_browser_ui_is_available_to_serve(self):
         page = (WEB / "index.html").read_text()
         self.assertIn("Ohrin", page)
-        self.assertIn("Select a passage", page)
+        self.assertIn("Open an audio file", page)
 
     def test_every_files_entry_exists(self):
         for path, name in FILES.items():
