@@ -46,6 +46,8 @@ class HostOriginGuardTests(unittest.TestCase):
         self.url = "/api/analyze?start=0&end=4"
 
     def post(self, headers, body=b"abc"):
+        if "Content-Type" not in headers and not getattr(self, "_no_ct", False):
+            headers = {**headers, "Content-Type": "application/octet-stream"}
         with mock.patch("ohrin.server.analyze_upload", return_value={"ok": True}) as m:
             out = request(self.port, "POST", self.url, headers, body)
         return out, m
@@ -94,6 +96,24 @@ class HostOriginGuardTests(unittest.TestCase):
         (status, _, _), m = self.post({"Host": self.host})
         self.assertEqual(status, 200)
         m.assert_called_once()
+
+    def test_post_safelisted_or_missing_content_type_rejected(self):
+        for ctype in ["text/plain", "text/plain; charset=UTF-8", "Application/X-WWW-Form-Urlencoded",
+                      "multipart/form-data; boundary=x", " text/plain ", None]:
+            self._no_ct = ctype is None
+            headers = {"Host": self.host}
+            if ctype is not None:
+                headers["Content-Type"] = ctype
+            (status, _, body), m = self.post(headers)
+            self.assertEqual(status, 403, ctype)
+            self.assertEqual(json.loads(body), {"error": "Cross-origin requests are not allowed."})
+            m.assert_not_called()
+
+    def test_post_audio_content_types_pass(self):
+        for ctype in ["application/octet-stream", "audio/wav"]:
+            (status, _, _), m = self.post({"Host": self.host, "Content-Type": ctype})
+            self.assertEqual(status, 200, ctype)
+            m.assert_called_once()
 
     def test_post_bad_host_rejected_even_with_matching_origin(self):
         (status, _, _), m = self.post({"Host": "evil.example", "Origin": f"http://127.0.0.1:{self.port}"})

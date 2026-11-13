@@ -42,6 +42,8 @@ def analyze_upload(data: bytes, start: float, end: float) -> dict:
         return result
 
 
+SAFELISTED_TYPES = {"text/plain", "application/x-www-form-urlencoded", "multipart/form-data"}
+
 CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8",
     ".css": "text/css; charset=utf-8",
@@ -78,6 +80,10 @@ class Handler(BaseHTTPRequestHandler):
         if origin is None:
             return True
         return origin.lower() in {f"http://{h}" for h in self._allowed_hosts()}
+
+    def _content_type_ok(self):
+        media = self.headers.get("Content-Type", "").split(";")[0].strip().lower()
+        return bool(media) and media not in SAFELISTED_TYPES
 
     def _reject_host(self):
         body = b"Forbidden host."
@@ -121,7 +127,7 @@ class Handler(BaseHTTPRequestHandler):
         if url.path != "/api/analyze":
             self.send_error(404)
             return
-        if not self._origin_ok():
+        if not self._origin_ok() or not self._content_type_ok():
             self._json(403, {"error": "Cross-origin requests are not allowed."})
             return
         try:
