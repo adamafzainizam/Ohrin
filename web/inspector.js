@@ -1,5 +1,6 @@
 import { measuredObservations, timeToFraction, instrumentTimeline, candidateTarget, segmentTarget, setLabel,
   uncoveredCaption, reviewTallyText, formatTime } from './state.mjs';
+import { getPalette, CANVAS_FONT } from './theme.mjs';
 
 const $ = id => document.getElementById(id);
 function setText(id, value) { $(id).textContent = value; }
@@ -13,13 +14,14 @@ export function createInspector({ store, announce, transport, fitCanvas }) {
   function drawEnergy() {
     const { analysis } = store.get();
     const { ctx, w, h } = fitCanvas($('energyChart'));
+    const p = getPalette();
     const values = analysis.windows;
     ctx.clearRect(0, 0, w, h);
     const left = 32, bottom = h - 24, top = 12, chartW = w - 44;
     for (const db of [-40, -30, -20, -10, 0]) {
       const y = top + (-db / 40) * (bottom - top);
-      ctx.strokeStyle = '#304044'; ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(w - 8, y); ctx.stroke();
-      ctx.fillStyle = '#839b94'; ctx.font = '10px system-ui'; ctx.fillText(String(db), 2, y + 3);
+      ctx.strokeStyle = p.grid; ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(w - 8, y); ctx.stroke();
+      ctx.fillStyle = p.textMuted; ctx.font = CANVAS_FONT; ctx.fillText(String(db), 2, y + 3);
     }
     if (!values.length) return;
     ctx.beginPath();
@@ -28,8 +30,8 @@ export function createInspector({ store, announce, transport, fitCanvas }) {
       const y = top + Math.max(0, Math.min(1, -v.rms_dbfs / 40)) * (bottom - top);
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     });
-    ctx.strokeStyle = '#9fe4ca'; ctx.lineWidth = 2.5; ctx.stroke();
-    ctx.fillStyle = '#839b94'; ctx.fillText(formatTime(analysis.passage.start_s), left, h - 4);
+    ctx.strokeStyle = p.dataMeasured; ctx.lineWidth = 2.5; ctx.stroke();
+    ctx.fillStyle = p.textMuted; ctx.fillText(formatTime(analysis.passage.start_s), left, h - 4);
     ctx.fillText(formatTime(analysis.passage.end_s), w - 39, h - 4);
   }
 

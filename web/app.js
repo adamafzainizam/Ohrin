@@ -1,4 +1,5 @@
 import { initEq } from './eq-ui.js';
+import { initTheme, getPalette, onInvalidate, observeCanvasHost } from './theme.mjs';
 import { createStore, fileLoaded } from './store.mjs';
 import { createTransport } from './transport.js';
 import { createInspector } from './inspector.js';
@@ -40,8 +41,9 @@ function clearPassageFindings() {
 }
 function fitCanvas(target) {
   const ratio = window.devicePixelRatio || 1;
-  const w = Math.max(1, target.clientWidth);
-  const h = Math.max(1, target.clientHeight);
+  const box = target.getBoundingClientRect();
+  const w = Math.max(1, box.width);
+  const h = Math.max(1, box.height);
   target.width = Math.round(w * ratio);
   target.height = Math.round(h * ratio);
   const ctx = target.getContext('2d');
@@ -52,23 +54,24 @@ function fitCanvas(target) {
 function drawWaveform() {
   const { ctx, w, h } = fitCanvas(canvas);
   ctx.clearRect(0, 0, w, h);
-  ctx.strokeStyle = '#263a3a';
+  const p = getPalette();
+  ctx.strokeStyle = p.grid;
   ctx.beginPath(); ctx.moveTo(0, h / 2); ctx.lineTo(w, h / 2); ctx.stroke();
   if (!waveform) return;
   const d = Math.max(player.duration || 1, 1);
   const { selection } = store.get();
   const x1 = selection.start / d * w;
   const x2 = selection.end / d * w;
-  ctx.fillStyle = 'rgba(159,228,202,.13)'; ctx.fillRect(x1, 0, Math.max(1, x2 - x1), h);
+  ctx.fillStyle = p.accentFill; ctx.fillRect(x1, 0, Math.max(1, x2 - x1), h);
   const step = waveform.length / w;
   for (let x = 0; x < w; x++) {
     const amp = waveform[Math.min(waveform.length - 1, Math.floor(x * step))] || 0;
-    ctx.strokeStyle = x >= x1 && x <= x2 ? '#9fe4ca' : '#4d7771';
+    ctx.strokeStyle = x >= x1 && x <= x2 ? p.wave : p.waveDim;
     ctx.beginPath(); ctx.moveTo(x + .5, h / 2 - amp * h * .43); ctx.lineTo(x + .5, h / 2 + amp * h * .43); ctx.stroke();
   }
-  ctx.fillStyle = '#efbb7a';
+  ctx.fillStyle = p.playhead;
   ctx.fillRect((player.currentTime || 0) / d * w - 1, 0, 2, h);
-  for (const x of [x1, x2]) { ctx.fillStyle = '#a9e6d0'; ctx.fillRect(x - 1, 0, 2, h); }
+  for (const x of [x1, x2]) { ctx.fillStyle = p.accent; ctx.fillRect(x - 1, 0, 2, h); }
 }
 
 async function makeWaveform(audioFile) {
@@ -217,5 +220,8 @@ $('exportButton').addEventListener('click', () => {
   const link = document.createElement('a'); link.href = url; link.download = 'ohrin-passage-note.json'; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
-window.addEventListener('resize', () => { drawWaveform(); inspector.render('layout'); });
+initTheme();
+observeCanvasHost(canvas);
+observeCanvasHost($('energyChart'));
+onInvalidate(() => { drawWaveform(); inspector.render('layout'); });
 drawWaveform();

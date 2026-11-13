@@ -6,6 +6,7 @@ import './input-rules.test.mjs';
 import './timeline.test.mjs';
 import './store.test.mjs';
 import './transport.test.mjs';
+import './theme.test.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {

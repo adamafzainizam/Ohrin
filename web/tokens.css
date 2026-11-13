@@ -1,0 +1,112 @@
+/* Primitives: raw values. Components and canvases use only the semantic roles below. */
+:root {
+  --gray-950: #141517;
+  --gray-900: #1b1d20;
+  --gray-850: #24272b;
+  --gray-800: #2f3237;
+  --gray-700: #4a4e55;
+  --gray-600: #73787f;
+  --gray-550: #7b818a;
+  --gray-400: #9da1a8;
+  --gray-300: #c9ccd1;
+  --gray-100: #ececea;
+  --gray-50: #e8eaed;
+  --paper-0: #fafafb;
+  --paper-100: #f3f4f5;
+  --paper-200: #e9ebee;
+  --paper-300: #d5d8dc;
+  --paper-400: #b4b9bf;
+  --slate-500: #7d838c;
+  --slate-600: #555b63;
+  --slate-700: #3a3f46;
+  --ink: #17191c;
+  --amber-400: #f0a35a;
+  --amber-700: #9a520f;
+}
+
+/* Semantic roles. Dark is the default. */
+:root {
+  color-scheme: dark;
+  --surface-0: var(--gray-950);
+  --surface-1: var(--gray-900);
+  --surface-2: var(--gray-850);
+  --line: var(--gray-800);
+  --line-strong: var(--gray-550);
+  --text: var(--gray-100);
+  --text-muted: var(--gray-400);
+  --accent: var(--amber-400);
+  --on-accent: var(--gray-950);
+  --accent-fill: rgba(240, 163, 90, 0.16);
+  --hatch: var(--gray-600);
+  --wave: var(--gray-400);
+  --data-measured: var(--gray-300);
+  --grid: var(--line);
+  --wave-dim: var(--gray-700);
+  --playhead: var(--accent);
+  --focus: var(--gray-50);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --surface-0: var(--paper-100);
+    --surface-1: var(--paper-0);
+    --surface-2: var(--paper-200);
+    --line: var(--paper-300);
+    --line-strong: var(--slate-500);
+    --text: var(--ink);
+    --text-muted: var(--slate-600);
+    --accent: var(--amber-700);
+    --on-accent: var(--paper-0);
+    --accent-fill: rgba(154, 82, 15, 0.12);
+    --hatch: var(--slate-500);
+    --wave: var(--slate-600);
+    --data-measured: var(--slate-700);
+    --grid: var(--line);
+    --wave-dim: var(--paper-400);
+    --playhead: var(--accent);
+    --focus: var(--ink);
+  }
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --surface-0: var(--paper-100);
+  --surface-1: var(--paper-0);
+  --surface-2: var(--paper-200);
+  --line: var(--paper-300);
+  --line-strong: var(--slate-500);
+  --text: var(--ink);
+  --text-muted: var(--slate-600);
+  --accent: var(--amber-700);
+  --on-accent: var(--paper-0);
+  --accent-fill: rgba(154, 82, 15, 0.12);
+  --hatch: var(--slate-500);
+  --wave: var(--slate-600);
+  --data-measured: var(--slate-700);
+  --grid: var(--line);
+  --wave-dim: var(--paper-400);
+  --playhead: var(--accent);
+  --focus: var(--ink);
+}
+
+@font-face {
+  font-family: "Geist";
+  src: url("/fonts/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/fonts/GeistMono-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --font-ui: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
