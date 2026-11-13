@@ -48,7 +48,7 @@ Open `http://127.0.0.1:8765`. Choose an audio file under 50 MB, select a passage
 
 ## The workbench
 
-Layout: a transport bar at the top, then a stack of lanes that share one time axis (a whole-track overview, a time ruler, the waveform, the measured RMS level and, after analysis, one lane per instrument with the block strip below). The inspector sits beside the lanes with tabs for Measured, Pulse, Instruments, Guitar, Arrange and Notes. Findings from analysis appear in those tabs. Pulse, chord, instrument and tuning results are candidates, not facts.
+Layout: a transport bar at the top, then a stack of lanes that share one time axis (a whole-track overview, a time ruler, the waveform, the measured RMS level and, after analysis, one lane per instrument with the block strip below). From 1280 px wide the inspector sits beside the lanes; below that it sits under them. It has tabs for Measured, Pulse, Instruments, Guitar, Arrange and Notes. Findings from analysis appear in those tabs. Pulse, chord, instrument and tuning results are candidates, not facts.
 
 Zoom and pan the lanes:
 
@@ -61,7 +61,7 @@ Zoom and pan the lanes:
 
 In the inspector, Left and Right (or Up and Down) move between tabs, and Home and End jump to the first and last.
 
-Theme: the System, Light and Dark buttons in the header set the colour theme. System follows the operating system, and an explicit choice is remembered in the browser's local storage.
+Theme: the System, Light and Dark buttons set the colour theme. They are in the top bar from 1280 px wide and inside the More menu below that. System follows the operating system, and an explicit choice is remembered in the browser's local storage.
 
 Privacy: the server listens on 127.0.0.1 only and has no option to change that. The page sends audio only to that local server, for analysis, and loads no remote scripts, fonts or services. Playback uses a local object URL.
 
@@ -98,3 +98,5 @@ The browser UI has been checked by hand in Chrome and a headless browser using s
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).
+
+Third-party assets: the Geist fonts are under the SIL OFL 1.1 (`web/fonts/OFL.txt`) and the Phosphor icons under MIT (`web/icons/LICENSE`).
