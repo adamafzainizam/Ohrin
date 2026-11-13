@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parsePalette, readStoredTheme } from '../web/theme.mjs';
+import { parsePalette, readStoredTheme, onInvalidate, invalidate } from '../web/theme.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -54,4 +54,16 @@ test('tokens.css defines every role in the dark block and both light blocks', ()
   }
   assert.deepEqual(lightMedia.body.replace(/\s+/g, ''), lightAttr.body.replace(/\s+/g, ''));
   assert.doesNotMatch(css, /light-dark\(|color-mix\(/);
+});
+
+test('a throwing invalidate listener does not skip the others and is reported', t => {
+  const errors = [];
+  t.mock.method(console, 'error', (...args) => { errors.push(args); });
+  const ran = [];
+  const offA = onInvalidate(() => { throw new Error('boom'); });
+  const offB = onInvalidate(() => ran.push('b'));
+  t.after(() => { offA(); offB(); });
+  assert.doesNotThrow(() => invalidate());
+  assert.deepEqual(ran, ['b']);
+  assert.equal(errors.length, 1);
 });

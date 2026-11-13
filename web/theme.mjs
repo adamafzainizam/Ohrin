@@ -44,7 +44,9 @@ export function onInvalidate(fn) {
 
 export function invalidate() {
   cached = null;
-  for (const fn of [...listeners]) fn();
+  for (const fn of [...listeners]) {
+    try { fn(); } catch (error) { console.error('Theme redraw listener failed:', error); }
+  }
 }
 
 export function getPalette() {

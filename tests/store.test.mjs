@@ -94,3 +94,16 @@ test('zoom does not touch selection', () => {
   assert.deepEqual(store.get().selection, { start: 3, end: 9 });
   assert.equal(store.get().selection, sel);
 });
+
+test('a throwing subscriber does not skip the others and is reported', t => {
+  const errors = [];
+  t.mock.method(console, 'error', (...args) => { errors.push(args); });
+  const store = createStore();
+  const ran = [];
+  store.subscribe('ui', () => { throw new Error('boom'); });
+  store.subscribe('ui', () => ran.push('second'));
+  assert.doesNotThrow(() => store.set('ui', { activeTab: 'notes' }));
+  assert.deepEqual(ran, ['second']);
+  assert.equal(errors.length, 1);
+  assert.equal(store.get().activeTab, 'notes');
+});

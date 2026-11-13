@@ -29,7 +29,10 @@ export function createStore(initial = {}) {
     set(topic, patch) {
       checkTopic(topic);
       state = { ...state, ...patch };
-      for (const fn of [...subs.get(topic)]) fn(state);
+      // One throwing subscriber must not skip the others.
+      for (const fn of [...subs.get(topic)]) {
+        try { fn(state); } catch (error) { console.error(`Store subscriber for "${topic}" failed:`, error); }
+      }
     },
     subscribe(topic, fn) {
       checkTopic(topic);
