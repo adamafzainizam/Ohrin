@@ -1,10 +1,124 @@
+import http.client
+import json
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from ohrin.server import WEB, FILES, Handler, analyze_upload, content_type_for
+from ohrin.server import WEB, FILES, analyze_upload, content_type_for, make_server
 from tests.test_analysis import write_tone
+
+
+def start_server(case):
+    server = make_server(port=0)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    def stop():
+        server.shutdown()
+        server.server_close()
+        thread.join(5)
+
+    case.addCleanup(stop)
+    return server
+
+
+def request(port, method, path, headers, body=None):
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+    try:
+        conn.putrequest(method, path, skip_host=True, skip_accept_encoding=True)
+        for key, value in headers.items():
+            conn.putheader(key, value)
+        if body is not None:
+            conn.putheader("Content-Length", str(len(body)))
+        conn.endheaders(body)
+        resp = conn.getresponse()
+        return resp.status, dict(resp.getheaders()), resp.read()
+    finally:
+        conn.close()
+
+
+class HostOriginGuardTests(unittest.TestCase):
+    def setUp(self):
+        self.port = start_server(self).server_address[1]
+        self.host = f"127.0.0.1:{self.port}"
+        self.url = "/api/analyze?start=0&end=4"
+
+    def post(self, headers, body=b"abc"):
+        if "Content-Type" not in headers and not getattr(self, "_no_ct", False):
+            headers = {**headers, "Content-Type": "application/octet-stream"}
+        with mock.patch("ohrin.server.analyze_upload", return_value={"ok": True}) as m:
+            out = request(self.port, "POST", self.url, headers, body)
+        return out, m
+
+    def test_get_good_host_ok_with_nosniff(self):
+        status, headers, _ = request(self.port, "GET", "/", {"Host": self.host})
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
+
+    def test_get_localhost_host_ok_and_case_insensitive(self):
+        self.assertEqual(request(self.port, "GET", "/", {"Host": f"localhost:{self.port}"})[0], 200)
+        self.assertEqual(request(self.port, "GET", "/", {"Host": f"LocalHost:{self.port}"})[0], 200)
+
+    def test_get_bad_hosts_rejected(self):
+        for host in [f"evil.example:{self.port}", "127.0.0.1", f"127.0.0.1:{self.port + 1}", "localhost"]:
+            status, _, body = request(self.port, "GET", "/", {"Host": host})
+            self.assertEqual(status, 403, host)
+            self.assertNotIn(b"Ohrin", body)
+
+    def test_get_missing_host_rejected(self):
+        conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=10)
+        conn.putrequest("GET", "/", skip_host=True, skip_accept_encoding=True)
+        conn.endheaders()
+        resp = conn.getresponse()
+        resp.read()
+        conn.close()
+        self.assertEqual(resp.status, 403)
+
+    def test_post_foreign_origin_rejected_with_json(self):
+        for origin in ["http://evil.example", "null"]:
+            (status, headers, body), m = self.post({"Host": self.host, "Origin": origin})
+            self.assertEqual(status, 403, origin)
+            self.assertEqual(json.loads(body), {"error": "Cross-origin requests are not allowed."})
+            self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
+            m.assert_not_called()
+
+    def test_post_matching_origin_passes_guard(self):
+        for origin in [f"http://127.0.0.1:{self.port}", f"http://localhost:{self.port}"]:
+            (status, headers, body), m = self.post({"Host": self.host, "Origin": origin})
+            self.assertEqual(status, 200, origin)
+            self.assertEqual(json.loads(body), {"ok": True})
+            self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
+            m.assert_called_once()
+
+    def test_post_without_origin_passes_guard(self):
+        (status, _, _), m = self.post({"Host": self.host})
+        self.assertEqual(status, 200)
+        m.assert_called_once()
+
+    def test_post_safelisted_or_missing_content_type_rejected(self):
+        for ctype in ["text/plain", "text/plain; charset=UTF-8", "Application/X-WWW-Form-Urlencoded",
+                      "multipart/form-data; boundary=x", " text/plain ", None]:
+            self._no_ct = ctype is None
+            headers = {"Host": self.host}
+            if ctype is not None:
+                headers["Content-Type"] = ctype
+            (status, _, body), m = self.post(headers)
+            self.assertEqual(status, 403, ctype)
+            self.assertEqual(json.loads(body), {"error": "Cross-origin requests are not allowed."})
+            m.assert_not_called()
+
+    def test_post_audio_content_types_pass(self):
+        for ctype in ["application/octet-stream", "audio/wav"]:
+            (status, _, _), m = self.post({"Host": self.host, "Content-Type": ctype})
+            self.assertEqual(status, 200, ctype)
+            m.assert_called_once()
+
+    def test_post_bad_host_rejected_even_with_matching_origin(self):
+        (status, _, _), m = self.post({"Host": "evil.example", "Origin": f"http://127.0.0.1:{self.port}"})
+        self.assertEqual(status, 403)
+        m.assert_not_called()
 
 
 class ServerBoundaryTests(unittest.TestCase):
@@ -28,22 +142,14 @@ class ServerBoundaryTests(unittest.TestCase):
         self.assertEqual(content_type_for("a.woff2"), "font/woff2")
 
     def test_eq_static_routes(self):
-        import io
+        server = start_server(self)
+        port = server.server_address[1]
         for path, expected in [("/eq.mjs", 200), ("/eq-ui.js", 200), ("/unknown-eq.js", 404)]:
-            handler = object.__new__(Handler)
-            handler.path = path
-            handler.wfile = io.BytesIO()
-            handler.send_response = mock.Mock()
-            handler.send_header = mock.Mock()
-            handler.end_headers = mock.Mock()
-            handler.send_error = mock.Mock()
-            handler.do_GET()
+            status, headers, body = request(port, "GET", path, {"Host": f"127.0.0.1:{port}"})
+            self.assertEqual(status, expected)
             if expected == 200:
-                handler.send_response.assert_called_with(200)
-                handler.send_header.assert_any_call("Content-Type", "text/javascript; charset=utf-8")
-                self.assertTrue(handler.wfile.getvalue())
-            else:
-                handler.send_error.assert_called()
+                self.assertEqual(headers["Content-Type"], "text/javascript; charset=utf-8")
+                self.assertTrue(body)
 
     def _analyze(self, instruments):
         with tempfile.TemporaryDirectory() as d:
