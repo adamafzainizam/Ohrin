@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, urlsplit
 from . import assets, ffmpeg, paths
 from .analysis import analyze_audio
 from .instrument_inference import predict_or_unavailable
-from .setup_job import Busy, SetupJob
+from .setup_job import Busy, Closed, SetupJob
 
 
 WEB = paths.resource_root() / "web"
@@ -201,6 +201,9 @@ class Handler(BaseHTTPRequestHandler):
         except Busy:
             self._json(409, {"error": "A download is already running."})
             return
+        except Closed:
+            self._json(503, {"error": "Ohrin is shutting down."})
+            return
         self._json(202, self.server.setup_job.snapshot())
 
     def _post_setup_cancel(self, url):
@@ -250,6 +253,10 @@ class OhrinServer(ThreadingHTTPServer):
         self.mode = mode
         self.setup_job = SetupJob(paths.user_data_dir, **({"opener": opener} if opener else {}))
         self.quit_event = threading.Event()
+        try:
+            assets.sweep_stale_parts(paths.user_data_dir())
+        except OSError:
+            pass
         super().__init__(address, handler)
 
     def server_bind(self):

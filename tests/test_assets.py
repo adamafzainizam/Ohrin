@@ -56,6 +56,79 @@ class AssetsTests(unittest.TestCase):
         self.assertFalse(dest.exists())
         self.assertFalse(dest.with_name("w.bin.part").exists())
 
+    def test_part_file_is_unique_exclusive_and_not_the_shared_name(self):
+        dest = self.dir / "w.bin"
+        seen = []
+
+        class Spy(io.BytesIO):
+            headers = {}
+
+            def __enter__(self_):
+                seen.extend(p.name for p in self.dir.iterdir())
+                return self_
+
+            def __exit__(self_, *a):
+                return False
+
+        # A pre-planted symlink at the old shared name must never be written through.
+        victim = self.dir / "victim"
+        victim.write_bytes(b"keep")
+        (self.dir / "w.bin.part").symlink_to(victim)
+        assets.verify_or_download("http://x/w", dest, sha(b"abc"), opener=lambda *a, **k: Spy(b"abc"))
+        self.assertEqual(victim.read_bytes(), b"keep")
+        self.assertEqual(dest.read_bytes(), b"abc")
+        parts = [n for n in seen if n.startswith("w.bin.") and n.endswith(".part") and n != "w.bin.part"]
+        self.assertEqual(len(parts), 1)
+        self.assertEqual([p.name for p in self.dir.glob("w.bin.*.part")], [])
+
+    def test_read_timeout_is_20_seconds(self):
+        seen = {}
+
+        def opener(url, timeout):
+            seen["t"] = timeout
+            return io.BytesIO(b"abc")
+
+        class R(io.BytesIO):
+            headers = {}
+            __enter__ = lambda s: s
+            __exit__ = lambda s, *a: False
+
+        assets.verify_or_download("http://x/w", self.dir / "w.bin", sha(b"abc"), opener=lambda u, timeout: (seen.update(t=timeout), R(b"abc"))[1])
+        self.assertEqual(seen["t"], 20)
+
+    def test_sweep_removes_only_old_part_files_in_asset_dirs(self):
+        import os, time
+        for sub in ("vggish", "models", "other"):
+            (self.dir / sub).mkdir()
+        old = self.dir / "vggish" / "a.bin.abc123.part"
+        fresh = self.dir / "models" / "b.bin.def456.part"
+        wrong_name = self.dir / "models" / "notes.part.txt"
+        plain = self.dir / "vggish" / "a.bin"
+        elsewhere = self.dir / "other" / "x.bin.zzz.part"
+        for f in (old, fresh, wrong_name, plain, elsewhere):
+            f.write_bytes(b"1")
+        stale = time.time() - 7200
+        for f in (old, wrong_name, plain, elsewhere):
+            os.utime(f, (stale, stale))
+        assets.sweep_stale_parts(self.dir)
+        self.assertFalse(old.exists())
+        for f in (fresh, wrong_name, plain, elsewhere):
+            self.assertTrue(f.exists(), f.name)
+
+    def test_verified_cache_keeps_one_entry_per_path_and_is_locked(self):
+        sub = self.dir / "sub"
+        sub.mkdir()
+        target = sub / "a.bin"
+        target.write_bytes(b"abc")
+        with mock.patch.object(assets, "ASSETS", [self.entry()]):
+            assets.asset_status(self.dir)
+            target.write_bytes(b"abd")
+            assets.asset_status(self.dir)
+            target.write_bytes(b"abe")
+            assets.asset_status(self.dir)
+        self.assertEqual(len([k for k in assets._VERIFIED if k[0] == str(target)]), 1)
+        self.assertTrue(hasattr(assets._VERIFIED_LOCK, "acquire"))
+
     def test_fetch_script_table_matches_assets(self):
         expected = [{k: e[k] for k in ("name", "url", "sha256", "size")} for e in assets.ASSETS if e["subdir"] == "vggish"]
         self.assertEqual(fetch_vggish.FILES, expected)

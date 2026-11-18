@@ -1,11 +1,15 @@
 """Verified downloads of the model files Ohrin needs. Stdlib only, no network use except when a download is asked for."""
 import hashlib
 import os
+import tempfile
+import threading
+import time
 import urllib.request
 from pathlib import Path
 
 CHUNK = 1024 * 1024
-TIMEOUT_S = 60
+TIMEOUT_S = 20
+STALE_PART_AGE_S = 3600
 SIZE_SLACK = 1024 * 1024
 
 
@@ -65,7 +69,7 @@ def sha256_file(path):
 def verify_or_download(url, dest, sha256, opener=urllib.request.urlopen, force=False, progress=None, max_bytes=None, cancel=None):
     """Return "cached" or "downloaded". Never leaves a wrong file at `dest`.
 
-    Downloads go to `<dest>.part` and are renamed only after the checksum matches;
+    Downloads go to a unique `<dest>.<random>.part` created exclusively beside `dest` and are renamed only after the checksum matches;
     `max_bytes` aborts the stream early; `cancel` is polled once per chunk. A failed run leaves any existing file alone."""
     dest = Path(dest)
     if dest.exists():
@@ -74,11 +78,12 @@ def verify_or_download(url, dest, sha256, opener=urllib.request.urlopen, force=F
         if not force:
             raise ExistingFileInvalid(f"{dest} exists with an unexpected checksum; re-run with --force to replace it")
     dest.parent.mkdir(parents=True, exist_ok=True)
-    part = dest.with_name(dest.name + ".part")
+    fd, part_name = tempfile.mkstemp(dir=dest.parent, prefix=dest.name + ".", suffix=".part")
+    part = Path(part_name)
     digest = hashlib.sha256()
     done = 0
     try:
-        with opener(url, timeout=TIMEOUT_S) as response, open(part, "wb") as out:
+        with os.fdopen(fd, "wb") as out, opener(url, timeout=TIMEOUT_S) as response:
             declared = getattr(getattr(response, "headers", None), "get", lambda *_: None)("Content-Length")
             if max_bytes is not None and declared and declared.isdigit() and int(declared) > max_bytes:
                 raise SizeExceeded(f"server announced {declared} bytes, more than the expected {max_bytes}; aborting")
@@ -104,15 +109,39 @@ def verify_or_download(url, dest, sha256, opener=urllib.request.urlopen, force=F
     return "downloaded"
 
 
+def sweep_stale_parts(data_dir, max_age=STALE_PART_AGE_S):
+    """Delete leftover `*.part` download files older than `max_age` seconds in the asset directories. Nothing else."""
+    cutoff = time.time() - max_age
+    for subdir in sorted({e["subdir"] for e in ASSETS} | {"vggish", "models"}):
+        folder = Path(data_dir) / subdir
+        try:
+            candidates = list(folder.glob("*.part"))
+        except OSError:
+            continue
+        for path in candidates:
+            try:
+                if path.is_file() and not path.is_symlink() and path.stat().st_mtime < cutoff:
+                    path.unlink()
+            except OSError:
+                pass
+
+
 _VERIFIED = {}
+_VERIFIED_LOCK = threading.Lock()
 
 
 def _is_verified(path, expected):
     stat = path.stat()
     key = (str(path), stat.st_mtime_ns, stat.st_size, expected)
-    if key not in _VERIFIED:
-        _VERIFIED[key] = sha256_file(path) == expected
-    return _VERIFIED[key]
+    with _VERIFIED_LOCK:
+        if key in _VERIFIED:
+            return _VERIFIED[key]
+    result = sha256_file(path) == expected
+    with _VERIFIED_LOCK:
+        for old in [k for k in _VERIFIED if k[0] == key[0]]:
+            del _VERIFIED[old]
+        _VERIFIED[key] = result
+    return result
 
 
 def asset_status(data_dir):

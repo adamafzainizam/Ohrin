@@ -183,7 +183,47 @@ class SetupApiTests(SetupApiBase):
         with mock.patch("ohrin.instrument_inference.reset_model_cache") as reset:
             self.consent()
             self.wait_state({"done"})
-        reset.assert_called_once()
+        self.assertEqual(reset.call_count, 2)  # once per installed file
+
+    def test_cache_reset_after_each_file_and_on_cancel(self):
+        self.serve()
+        with mock.patch("ohrin.instrument_inference.reset_model_cache") as reset:
+            self.consent()
+            self.wait_state({"done"})
+        self.assertGreaterEqual(reset.call_count, 2)
+        (Path(self.tmp.name) / "vggish" / "a.bin").unlink()
+        gate = threading.Event()
+        job = SetupJob(lambda: self.tmp.name, opener=Opener({"https://example.invalid/a": A, "https://example.invalid/b": B}, gate))
+        with mock.patch("ohrin.instrument_inference.reset_model_cache") as reset2:
+            job.start()
+            job._cancel.set()
+            gate.set()
+            job.join(5)
+        self.assertGreaterEqual(reset2.call_count, 1)
+
+    def test_closed_job_refuses_start_and_cancels(self):
+        from ohrin.setup_job import Closed
+        gate = threading.Event()
+        job = SetupJob(lambda: self.tmp.name, opener=Opener({"https://example.invalid/a": A, "https://example.invalid/b": B}, gate))
+        job.start()
+        job.close()
+        gate.set()
+        job.join(5)
+        self.assertEqual(job.snapshot()["state"], "cancelled")
+        with self.assertRaises(Closed):
+            job.start()
+
+    def test_job_start_sweeps_stale_parts(self):
+        sub = Path(self.tmp.name) / "vggish"
+        sub.mkdir()
+        stale = sub / "a.bin.old123.part"
+        stale.write_bytes(b"x")
+        old = time.time() - 7200
+        os.utime(stale, (old, old))
+        self.serve()
+        self.consent()
+        self.wait_state({"done"})
+        self.assertFalse(stale.exists())
 
     def test_unpublished_head_returns_400(self):
         self.table.append(entry("head.pt", b"head", "models", url=None))
