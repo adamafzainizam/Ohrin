@@ -37,16 +37,24 @@ def analyze_upload(data: bytes, start: float, end: float) -> dict:
         raise ValueError("Select a valid passage.")
     if not 0 < len(data) <= MAX_UPLOAD:
         raise ValueError("Choose an audio file smaller than 50 MB.")
-    with tempfile.NamedTemporaryFile(prefix="ohrin-", suffix=".audio", delete=True) as tmp:
-        tmp.write(data)
-        tmp.flush()
-        result = analyze_audio(Path(tmp.name), start, end)
+    # Closed before analysis: on Windows another process cannot open a file this one still holds.
+    fd, name = tempfile.mkstemp(prefix="ohrin-", suffix=".audio")
+    tmp = Path(name)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+        result = analyze_audio(tmp, start, end)
         passage = result["passage"]
-        result["instruments"] = predict_or_unavailable(Path(tmp.name), passage["start_s"], passage["end_s"])
+        result["instruments"] = predict_or_unavailable(tmp, passage["start_s"], passage["end_s"])
         if result["instruments"]["available"]:
             result["limitations"] = [t for t in result["limitations"] if not t.startswith("Instrument identity")]
             result["limitations"].append("Instrument candidates are uncertain model outputs, not confirmed parts.")
         return result
+    finally:
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
 
 
 SAFELISTED_TYPES = {"text/plain", "application/x-www-form-urlencoded", "multipart/form-data"}
@@ -115,6 +123,9 @@ class Handler(BaseHTTPRequestHandler):
             self._reject_host()
             return
         path = urlsplit(self.path).path
+        if path.startswith("/api/") and self.headers.get("Sec-Fetch-Site", "").lower() == "cross-site":
+            self._json(403, {"error": "Cross-site requests are not allowed."})
+            return
         if path == "/api/setup":
             data_dir = paths.user_data_dir()
             todo = assets.missing(data_dir)

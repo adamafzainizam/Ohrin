@@ -39,6 +39,57 @@ def request(port, method, path, headers, body=None):
         conn.close()
 
 
+class TempFileLifecycleTests(unittest.TestCase):
+    def test_temp_file_is_closed_before_analysis_and_removed_after(self):
+        seen = {}
+
+        def fake_analyze(path, start, end):
+            seen["path"] = path
+            # Windows cannot open a file another handle holds; reopening for write models that.
+            with open(path, "r+b") as handle:
+                seen["data"] = handle.read()
+            return {"passage": {"start_s": 0, "end_s": 4}, "limitations": []}
+
+        def fake_predict(path, start, end):
+            seen["exists_for_predict"] = Path(path).exists()
+            return {"available": False}
+
+        with mock.patch("ohrin.server.analyze_audio", fake_analyze), \
+                mock.patch("ohrin.server.predict_or_unavailable", fake_predict):
+            analyze_upload(b"payload", 0, 4)
+        self.assertEqual(seen["data"], b"payload")
+        self.assertTrue(seen["exists_for_predict"])
+        self.assertFalse(seen["path"].exists())
+
+    def test_temp_file_removed_when_analysis_raises(self):
+        seen = {}
+
+        def boom(path, start, end):
+            seen["path"] = path
+            raise ValueError("bad")
+
+        with mock.patch("ohrin.server.analyze_audio", boom):
+            with self.assertRaises(ValueError):
+                analyze_upload(b"payload", 0, 4)
+        self.assertFalse(seen["path"].exists())
+
+
+class CrossSiteGetTests(unittest.TestCase):
+    def setUp(self):
+        self.port = start_server(self).server_address[1]
+        self.host = f"127.0.0.1:{self.port}"
+
+    def test_cross_site_api_get_is_forbidden(self):
+        for path in ("/api/setup", "/api/setup/progress"):
+            status, _, _ = request(self.port, "GET", path, {"Host": self.host, "Sec-Fetch-Site": "cross-site"})
+            self.assertEqual(status, 403, path)
+
+    def test_same_origin_none_and_absent_are_allowed(self):
+        for extra in ({"Sec-Fetch-Site": "same-origin"}, {"Sec-Fetch-Site": "none"}, {}):
+            status, _, _ = request(self.port, "GET", "/api/setup", {"Host": self.host, **extra})
+            self.assertEqual(status, 200, extra)
+
+
 class HostOriginGuardTests(unittest.TestCase):
     def setUp(self):
         self.port = start_server(self).server_address[1]
