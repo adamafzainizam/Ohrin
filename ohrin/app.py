@@ -94,7 +94,8 @@ def run_window(server, url, load_webview, debug):
         _WEBVIEW = webview
         server.mode = "window"
         api = DesktopApi()
-        api._window = webview.create_window("Ohrin", url, width=1280, height=860, min_size=(900, 640), js_api=api)
+        api._window = webview.create_window("Ohrin", url, width=1280, height=860, min_size=(900, 640), js_api=api,
+                                      text_select=True)
         webview.start(
             gui="gtk" if sys.platform.startswith("linux") else None,
             private_mode=False,

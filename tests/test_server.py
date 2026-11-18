@@ -127,6 +127,9 @@ class ServerBoundaryTests(unittest.TestCase):
         self.assertIn("Ohrin", page)
         self.assertIn("Open an audio file", page)
 
+    def test_page_declares_an_inline_icon_so_favicon_is_not_requested(self):
+        self.assertIn('<link rel="icon" href="data:,">', (WEB / "index.html").read_text())
+
     def test_every_files_entry_exists(self):
         for path, name in FILES.items():
             self.assertTrue((WEB / name).is_file(), f"{path} -> {name}")

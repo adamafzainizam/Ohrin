@@ -101,6 +101,7 @@ class WindowModeTests(AppCase):
         self.assertNotEqual(url_port(calls.window.url), busy)
         self.assertEqual(calls.window.kw["width"], 1280)
         self.assertEqual(calls.window.kw["min_size"], (900, 640))
+        self.assertIs(calls.window.kw["text_select"], True)
 
     def test_window_start_uses_persistent_storage_in_data_dir(self):
         webview, calls = self.fake_webview()
