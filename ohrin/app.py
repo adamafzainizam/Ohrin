@@ -135,6 +135,8 @@ def main(argv=None, *, load_webview=_import_webview, open_browser=webbrowser.ope
             except KeyboardInterrupt:
                 pass
     finally:
+        server.setup_job.cancel()
+        server.setup_job.join(5)
         server.shutdown()
         server.server_close()
         thread.join(5)

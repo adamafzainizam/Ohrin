@@ -11,9 +11,10 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
-from . import ffmpeg, paths
+from . import assets, ffmpeg, paths
 from .analysis import analyze_audio
 from .instrument_inference import predict_or_unavailable
+from .setup_job import Busy, SetupJob
 
 
 WEB = paths.resource_root() / "web"
@@ -114,12 +115,21 @@ class Handler(BaseHTTPRequestHandler):
             return
         path = urlsplit(self.path).path
         if path == "/api/setup":
+            data_dir = paths.user_data_dir()
+            todo = assets.missing(data_dir)
             self._json(200, {
                 "mode": self.server.mode,
-                "data_dir": str(paths.user_data_dir()),
+                "data_dir": str(data_dir),
                 "ffmpeg": ffmpeg.status(),
                 "torch": importlib.util.find_spec("torch") is not None,
+                "assets": assets.asset_status(data_dir),
+                "downloadable": all(e["url"] for e in todo),
+                "download_bytes": sum(e["size"] for e in todo),
+                "hosts": sorted({e["host"] for e in todo}),
             })
+            return
+        if path == "/api/setup/progress":
+            self._json(200, self.server.setup_job.snapshot())
             return
         if path not in FILES:
             self.send_error(404)
@@ -147,10 +157,44 @@ class Handler(BaseHTTPRequestHandler):
         handler(url)
 
     def _post_routes(self):
-        routes = {"/api/analyze": self._post_analyze}
+        routes = {"/api/analyze": self._post_analyze, "/api/setup/download": self._post_setup_download,
+                  "/api/setup/cancel": self._post_setup_cancel}
         if self.server.mode == "browser":
             routes["/api/quit"] = self._post_quit
         return routes
+
+    def _read_small_body(self, limit=1024):
+        try:
+            size = int(self.headers.get("Content-Length", "0") or 0)
+        except ValueError:
+            size = 0
+        if size > limit or size < 0:
+            return None
+        return self.rfile.read(size) if size else b""
+
+    def _post_setup_download(self, url):
+        raw = self._read_small_body()
+        try:
+            body = json.loads(raw) if raw else None
+        except (ValueError, UnicodeDecodeError):
+            body = None
+        if not isinstance(body, dict) or set(body) != {"consent"} or body["consent"] is not True:
+            self._json(400, {"error": "Consent is required to download."})
+            return
+        if not assets.downloadable(paths.user_data_dir()):
+            self._json(400, {"error": "The instrument model is not published yet."})
+            return
+        try:
+            self.server.setup_job.start()
+        except Busy:
+            self._json(409, {"error": "A download is already running."})
+            return
+        self._json(202, self.server.setup_job.snapshot())
+
+    def _post_setup_cancel(self, url):
+        self._read_small_body()
+        self.server.setup_job.cancel()
+        self._json(200, self.server.setup_job.snapshot())
 
     def _post_quit(self, url):
         try:
@@ -190,8 +234,9 @@ class OhrinServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = reuse_address_for(sys.platform)
 
-    def __init__(self, address, handler, mode="dev"):
+    def __init__(self, address, handler, mode="dev", opener=None):
         self.mode = mode
+        self.setup_job = SetupJob(paths.user_data_dir, **({"opener": opener} if opener else {}))
         self.quit_event = threading.Event()
         super().__init__(address, handler)
 
@@ -201,8 +246,8 @@ class OhrinServer(ThreadingHTTPServer):
         super().server_bind()
 
 
-def make_server(port=8765, *, mode="dev"):
-    return OhrinServer(("127.0.0.1", port), Handler, mode=mode)
+def make_server(port=8765, *, mode="dev", opener=None):
+    return OhrinServer(("127.0.0.1", port), Handler, mode=mode, opener=opener)
 
 
 def bind_preferred(preferred, *, mode):

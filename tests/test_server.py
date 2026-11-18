@@ -302,7 +302,7 @@ class ServerLifecycleTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn("application/json", headers["Content-Type"])
         data = json.loads(body)
-        self.assertEqual(set(data), {"mode", "data_dir", "ffmpeg", "torch"})
+        self.assertEqual(set(data), {"mode", "data_dir", "ffmpeg", "torch", "assets", "downloadable", "download_bytes", "hosts"})
         self.assertEqual(data["mode"], "window")
         self.assertIsInstance(data["data_dir"], str)
         self.assertEqual(set(data["ffmpeg"]), {"found", "ffmpeg", "ffprobe", "hint"})
