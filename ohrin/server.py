@@ -8,6 +8,7 @@ import socket
 import sys
 import tempfile
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
@@ -173,6 +174,7 @@ class Handler(BaseHTTPRequestHandler):
                   "/api/setup/cancel": self._post_setup_cancel}
         if self.server.mode == "browser":
             routes["/api/quit"] = self._post_quit
+            routes["/api/heartbeat"] = self._post_heartbeat
         return routes
 
     def _read_small_body(self, limit=1024):
@@ -210,6 +212,11 @@ class Handler(BaseHTTPRequestHandler):
         self._read_small_body()
         self.server.setup_job.cancel()
         self._json(200, self.server.setup_job.snapshot())
+
+    def _post_heartbeat(self, url):
+        self._read_small_body()
+        self.server.last_heartbeat = self.server.clock()
+        self._json(200, {"ok": True})
 
     def _post_quit(self, url):
         try:
@@ -253,6 +260,8 @@ class OhrinServer(ThreadingHTTPServer):
         self.mode = mode
         self.setup_job = SetupJob(paths.user_data_dir, **({"opener": opener} if opener else {}))
         self.quit_event = threading.Event()
+        self.clock = time.monotonic
+        self.last_heartbeat = None
         try:
             assets.sweep_stale_parts(paths.user_data_dir())
         except OSError:
@@ -273,7 +282,7 @@ def bind_preferred(preferred, *, mode):
     """Try the preferred port, then any free one. Returns (server, fell_back)."""
     try:
         return make_server(preferred, mode=mode), False
-    except OSError:
+    except (OSError, OverflowError):
         return make_server(0, mode=mode), True
 
 

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { exportTarget, desktopView } from '../web/desktop.mjs';
+import { exportTarget, desktopView, startHeartbeat } from '../web/desktop.mjs';
 
 test('exportTarget picks native only when save_note is a function', () => {
   assert.equal(exportTarget({ pywebview: { api: { save_note() {} } } }), 'native');
@@ -31,4 +31,20 @@ test('desktopView tolerates missing setup', () => {
     assert.equal(view.showQuit, false);
     assert.equal(view.ffmpegMissing, false);
   }
+});
+
+test('heartbeat runs only in browser mode', () => {
+  for (const [mode, expected] of [['browser', 1], ['window', 0], ['dev', 0]]) {
+    const calls = []; const timers = [];
+    const fetchFn = (url, opts) => { calls.push([url, opts]); return Promise.resolve({}); };
+    startHeartbeat({}, { mode }, { fetchFn, setIntervalFn: (fn, ms) => { timers.push(ms); return 1; } });
+    assert.equal(calls.length, expected);
+    assert.deepEqual(timers, expected ? [10000] : []);
+    if (expected) {
+      assert.equal(calls[0][0], '/api/heartbeat');
+      assert.equal(calls[0][1].method, 'POST');
+      assert.equal(calls[0][1].headers['Content-Type'], 'application/json');
+    }
+  }
+  assert.equal(startHeartbeat({}, null, { fetchFn() {}, setIntervalFn() {} }), null);
 });
