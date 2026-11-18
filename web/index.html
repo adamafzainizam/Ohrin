@@ -56,6 +56,22 @@
         <button id="analyzeButton" class="primary-button" type="button" disabled>Analyse passage</button>
       </div>
       <div id="ffmpegBanner" class="stale-banner ffmpeg-banner" role="status" hidden><span id="ffmpegMessage"></span> <button id="ffmpegRecheck" class="secondary-button" type="button">Check again</button></div>
+      <section id="setupPanel" class="setup-panel" aria-labelledby="setupTitle" hidden>
+        <h2 id="setupTitle" class="setup-title" tabindex="-1">Instrument model setup</h2>
+        <p id="setupMessage" class="setup-message"></p>
+        <dl id="setupFacts" class="setup-facts" hidden>
+          <div><dt>Download</dt><dd id="setupSize"></dd></div>
+          <div><dt>From</dt><dd id="setupHosts"></dd></div>
+          <div><dt>Saved to</dt><dd id="setupDest"></dd></div>
+        </dl>
+        <progress id="setupProgress" class="setup-progress" max="100" aria-label="Download progress" hidden></progress>
+        <div class="setup-actions">
+          <button id="setupDownload" class="primary-button" type="button" hidden>Download</button>
+          <button id="setupCancel" class="secondary-button" type="button" hidden>Cancel</button>
+          <button id="setupRetry" class="primary-button" type="button" hidden>Retry</button>
+          <button id="setupDismiss" class="secondary-button" type="button">Not now</button>
+        </div>
+      </section>
       <p id="staleBanner" class="stale-banner" hidden></p>
       <div id="waveWrap" class="wave-wrap" hidden>
         <div id="laneStack" class="lane-stack" tabindex="0" role="group" aria-label="Time aligned audio lanes" aria-keyshortcuts="+ = -">

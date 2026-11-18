@@ -190,3 +190,14 @@ body.dropping .lane-area{outline:2px solid var(--accent);outline-offset:4px;bord
 .candidate small{font-family:var(--font-mono)}
 .ffmpeg-banner{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px}
 .stopped{padding:24px}
+
+/* First-run setup panel */
+.setup-panel{margin:12px 0;padding:12px;border:1px solid var(--line-strong);border-radius:var(--r-panel);background:var(--surface-1);font-size:13px}
+.setup-title{margin:0 0 6px;font-size:14px;font-weight:650}
+.setup-message{margin:0 0 8px;overflow-wrap:anywhere}
+.setup-facts{margin:0 0 10px;display:grid;gap:4px}
+.setup-facts div{display:flex;flex-wrap:wrap;gap:2px 10px}
+.setup-facts dt{min-width:72px;color:var(--text-muted)}
+.setup-facts dd{margin:0;min-width:0;overflow-wrap:anywhere}
+.setup-progress{display:block;width:100%;max-width:420px;height:10px;margin:0 0 10px;accent-color:var(--accent)}
+.setup-actions{display:flex;flex-wrap:wrap;gap:8px}

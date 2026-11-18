@@ -10,6 +10,7 @@ import { createStore, fileLoaded, isStale } from './store.mjs';
 import { createTransport } from './transport.js';
 import { createInspector } from './inspector.js';
 import { exportTarget, desktopView } from './desktop.mjs';
+import { initSetupPanel } from './setup-ui.js';
 import { fit, formatTenths, zoomAt, pan, followPage, xToTime } from './timeline.mjs';
 import { pickAudioFile, zoomKeyAllowed, zoomFactorFromWheel, wheelIntent, zoomAnchor, createCoalescer, createAnnouncer } from './input-rules.mjs';
 import { clampSelection, selectionFromField, formatTime, blockAnnouncement, reviewKey, reconcileReview, pruneReview,
@@ -391,7 +392,8 @@ async function loadSetup() {
     return await response.json();
   } catch (error) { return null; }
 }
-loadSetup().then(applyDesktopView);
+const setupPanel = initSetupPanel({ announce, loadSetup, focusAfterClose: () => $('openButton') });
+loadSetup().then(setup => { applyDesktopView(setup); setupPanel.show(setup); });
 $('ffmpegRecheck').addEventListener('click', async () => {
   const setup = await loadSetup();
   applyDesktopView(setup);

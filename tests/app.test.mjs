@@ -347,3 +347,4 @@ test('block announcement includes the segment time range, with a fallback when t
     'Block 3, 01:05 to 02:10 selected. Marking controls are in the Instruments tab.');
   assert.equal(blockAnnouncement(0, undefined), 'Block 1 selected. Marking controls are in the Instruments tab.');
 });
+import './setup.test.mjs';

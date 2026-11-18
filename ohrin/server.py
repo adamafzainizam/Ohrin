@@ -27,6 +27,7 @@ FILES = {"/": "index.html", "/style.css": "style.css", "/app.js": "app.js", "/st
          "/lanes/instruments.js": "lanes/instruments.js",
          "/lanes/playhead.js": "lanes/playhead.js",
          "/tokens.css": "tokens.css", "/theme.mjs": "theme.mjs", "/desktop.mjs": "desktop.mjs",
+         "/setup.mjs": "setup.mjs", "/setup-ui.js": "setup-ui.js",
          "/fonts/Geist-Variable.woff2": "fonts/Geist-Variable.woff2",
          "/fonts/GeistMono-Variable.woff2": "fonts/GeistMono-Variable.woff2"}
 
