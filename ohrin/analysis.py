@@ -8,6 +8,8 @@ import subprocess
 
 import numpy as np
 
+from . import ffmpeg
+
 
 SR = 22050
 FFT = 4096
@@ -16,7 +18,7 @@ PITCH_NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 
 
 def _run(args):
-    return subprocess.run(args, capture_output=True, check=False)
+    return subprocess.run(args, capture_output=True, check=False, **ffmpeg.run_kwargs())
 
 
 def _candidates(chroma):
@@ -65,7 +67,7 @@ def analyze_audio(path: Path, start_s: float, end_s: float) -> dict:
     """Return local measurements and explicitly tentative musical candidates."""
     if not np.isfinite(start_s) or not np.isfinite(end_s) or start_s < 0 or end_s <= start_s:
         raise ValueError("Select a passage with a valid start and end.")
-    probe = _run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(path)])
+    probe = _run([ffmpeg.tool("ffprobe"), "-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", str(path)])
     try:
         duration = float(probe.stdout.decode().strip())
     except ValueError as exc:
@@ -78,7 +80,7 @@ def analyze_audio(path: Path, start_s: float, end_s: float) -> dict:
     if end_s - start_s < 1:
         raise ValueError("Select at least one second of audio.")
     decoded = _run([
-        "ffmpeg", "-v", "error", "-ss", str(start_s), "-i", str(path),
+        ffmpeg.tool("ffmpeg"), "-v", "error", "-ss", str(start_s), "-i", str(path),
         "-t", str(end_s - start_s), "-map", "0:a:0", "-f", "f32le",
         "-acodec", "pcm_f32le", "-ar", str(SR), "-ac", "2", "-",
     ])

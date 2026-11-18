@@ -14,6 +14,8 @@ import numpy as np
 import torch
 from torch import nn
 
+from . import ffmpeg
+
 SAMPLE_RATE = 16000
 WINDOW = 400
 HOP = 160
@@ -45,13 +47,13 @@ def mel_matrix():
 
 
 def decode_mono_16k(path, start=None, duration=None):
-    cmd = ['ffmpeg', '-v', 'error', '-nostdin']
+    cmd = [ffmpeg.tool('ffmpeg'), '-v', 'error', '-nostdin']
     if start is not None:
         cmd += ['-ss', str(start)]
     if duration is not None:
         cmd += ['-t', str(duration)]
     cmd += ['-i', str(path), '-ac', '1', '-ar', str(SAMPLE_RATE), '-f', 'f32le', '-']
-    raw = subprocess.run(cmd, capture_output=True, check=True).stdout
+    raw = subprocess.run(cmd, capture_output=True, check=True, **ffmpeg.run_kwargs()).stdout
     return np.frombuffer(raw, dtype='<f4').astype(np.float64)
 
 
