@@ -28,7 +28,6 @@ def known_dirs(platform, env):
         dirs = []
         if env.get("LOCALAPPDATA"):
             dirs.append(W(env["LOCALAPPDATA"]) / "Microsoft" / "WinGet" / "Links")
-        dirs.append(W("C:/ffmpeg/bin"))
         if env.get("ProgramFiles"):
             dirs.append(W(env["ProgramFiles"]) / "ffmpeg" / "bin")
         if env.get("USERPROFILE"):
@@ -48,6 +47,9 @@ def find_tool(name, *, env=None, platform=None, which=shutil.which, is_file=os.p
         candidate = str(Pure(override) / filename)
         if is_file(candidate):
             return {"path": candidate, "source": "env"}
+    if platform == "win32":
+        # Windows searches the current directory first otherwise, which can hold a planted ffmpeg.exe.
+        os.environ["NoDefaultCurrentDirectoryInExePath"] = "1"
     found = which(name)
     if found:
         return {"path": found, "source": "path"}

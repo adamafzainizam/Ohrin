@@ -1,3 +1,4 @@
+import os
 import subprocess
 import tempfile
 import unittest
@@ -37,12 +38,12 @@ class DetectionTests(unittest.TestCase):
         self.assertEqual(lin, ["/usr/bin", "/usr/local/bin", "/snap/bin"])
         win = [str(d).replace("\\", "/") for d in ffmpeg.known_dirs(
             "win32", {"LOCALAPPDATA": "C:/L", "ProgramFiles": "C:/PF", "USERPROFILE": "C:/U"})]
-        self.assertEqual(win, ["C:/L/Microsoft/WinGet/Links", "C:/ffmpeg/bin", "C:/PF/ffmpeg/bin",
+        self.assertEqual(win, ["C:/L/Microsoft/WinGet/Links", "C:/PF/ffmpeg/bin",
                                "C:/U/scoop/shims", "C:/ProgramData/chocolatey/bin"])
 
     def test_windows_known_dir_adds_exe(self):
         got = ffmpeg.find_tool("ffmpeg", env={}, platform="win32", which=lambda n: None,
-                               is_file=lambda p: str(p).replace("\\", "/") == "C:/ffmpeg/bin/ffmpeg.exe")
+                               is_file=lambda p: str(p).replace("\\", "/") == "C:/ProgramData/chocolatey/bin/ffmpeg.exe")
         self.assertEqual(got["source"], "known")
         self.assertTrue(got["path"].endswith("ffmpeg.exe"))
 
@@ -60,6 +61,16 @@ class DetectionTests(unittest.TestCase):
         one = ffmpeg.status(env={}, platform="linux", which=lambda n: "/p/ffmpeg" if n == "ffmpeg" else None, is_file=fs())
         self.assertFalse(one["found"])
         self.assertEqual(one["ffmpeg"], "/p/ffmpeg")
+
+    def test_windows_lookup_excludes_the_current_directory(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("NoDefaultCurrentDirectoryInExePath", None)
+            seen = {}
+            ffmpeg.find_tool("ffmpeg", env={}, platform="win32",
+                             which=lambda n: seen.setdefault("v", os.environ.get("NoDefaultCurrentDirectoryInExePath")),
+                             is_file=lambda p: False)
+            self.assertEqual(seen["v"], "1")
+            self.assertNotIn("C:/ffmpeg/bin", [str(d).replace("\\", "/") for d in ffmpeg.known_dirs("win32", {})])
 
     def test_tool_raises_ffmpeg_missing_value_error(self):
         with mock.patch.object(ffmpeg, "find_tool", return_value=None):

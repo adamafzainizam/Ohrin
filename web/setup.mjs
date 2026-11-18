@@ -36,7 +36,7 @@ export function setupView(setup, progress, { dismissed = false } = {}) {
   if (state === 'error' || state === 'cancelled') {
     const retry = Boolean(setup.torch) && Boolean(setup.downloadable);
     return { ...base, visible: !dismissed, showRetry: retry,
-      message: state === 'cancelled' ? 'Download cancelled. Nothing was kept.' : (progress.error || 'The download failed.') };
+      message: state === 'cancelled' ? 'Download cancelled. Files that already verified were kept; the incomplete file was discarded.' : (progress.error || 'The download failed.') };
   }
   if (!missing || dismissed) return hidden;
   if (!setup.torch) return { ...base, visible: true, message: 'Instrument candidates need PyTorch, which this installation does not have.' };

@@ -51,6 +51,7 @@ test('setupView maps checksum error to discard message with retry', () => {
   assert.equal(v.showCancel, false);
   const c = setupView(setup(), { ...idle, state: 'cancelled' }, {});
   assert.equal(c.showRetry, true);
+  assert.equal(c.message, 'Download cancelled. Files that already verified were kept; the incomplete file was discarded.');
   const d = setupView(setup({ assets: assets.map(a => ({ ...a, verified: true })), download_bytes: 0 }), { ...idle, state: 'done' }, {});
   assert.equal(d.visible, true);
   assert.match(d.message, /Verified/);
