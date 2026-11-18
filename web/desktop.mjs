@@ -3,6 +3,18 @@ export function exportTarget(win) {
   return typeof win?.pywebview?.api?.save_note === 'function' ? 'native' : 'download';
 }
 
+// pywebview injects its api after the page loads. Inside its window, wait for it before choosing a target.
+export async function resolveExportTarget(win, timeoutMs = 3000) {
+  if (exportTarget(win) === 'native' || !win?.pywebview) return exportTarget(win);
+  await new Promise((resolve) => {
+    let timer = null;
+    const done = () => { clearTimeout(timer); win.removeEventListener?.('pywebviewready', done); resolve(); };
+    timer = setTimeout(done, timeoutMs);
+    win.addEventListener?.('pywebviewready', done);
+  });
+  return exportTarget(win);
+}
+
 export function desktopView(setup) {
   const ffmpeg = setup && typeof setup === 'object' ? setup.ffmpeg : null;
   // A missing or failed setup response gates nothing: only an explicit "not found" blocks analysis.

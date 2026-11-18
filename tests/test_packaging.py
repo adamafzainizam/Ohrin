@@ -16,6 +16,8 @@ class PackagingTests(unittest.TestCase):
         self.assertRegex(spec, r'"web"')
         for excluded in ("experiments", "scripts", "tkinter"):
             self.assertIn(f'"{excluded}"', spec)
+        for unused in ("requests", "urllib3", "certifi", "charset_normalizer", "idna", "pip_audit", "cachecontrol", "pip"):
+            self.assertIn(f'"{unused}"', spec)
         self.assertIn("OHRIN_FREEZE_GTK", spec)
         self.assertIn("BUNDLE", spec)
         self.assertNotIn("icon=", spec)
@@ -50,7 +52,10 @@ class PackagingTests(unittest.TestCase):
         text = (ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
         self.assertIn("contents: read", text)
         self.assertNotIn("secrets.", text)
-        self.assertNotRegex(text, r"(?i)release")
+        for creator in ("softprops/action-gh-release", "actions/create-release", "gh release"):
+            self.assertNotIn(creator, text)
+        self.assertNotRegex(text, r"(?m)^\s*uses:\s*\S*release\S*")
+        self.assertRegex(text, r"(?m)^permissions:\s*\n\s+contents: read\s*$")
         self.assertNotIn("contents: write", text)
         self.assertIn("persist-credentials: false", text)
 

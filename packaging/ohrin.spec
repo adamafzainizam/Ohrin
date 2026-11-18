@@ -8,6 +8,8 @@ from pathlib import Path
 ROOT = Path(SPECPATH).resolve().parent
 
 excludes = ["experiments", "scripts", "tkinter"]
+# Ohrin talks HTTP through urllib only; keep build-venv extras out of the bundle.
+excludes += ["requests", "urllib3", "certifi", "charset_normalizer", "idna", "pip_audit", "cachecontrol", "pip"]
 hiddenimports = []
 if sys.platform.startswith("linux") and os.environ.get("OHRIN_FREEZE_GTK", "1") == "0":
     excludes += ["gi", "cairo"]

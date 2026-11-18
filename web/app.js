@@ -9,7 +9,7 @@ import { initTheme, getPalette, onInvalidate, observeCanvasHost } from './theme.
 import { createStore, fileLoaded, isStale } from './store.mjs';
 import { createTransport } from './transport.js';
 import { createInspector } from './inspector.js';
-import { exportTarget, desktopView, startHeartbeat } from './desktop.mjs';
+import { resolveExportTarget, desktopView, startHeartbeat } from './desktop.mjs';
 import { initSetupPanel } from './setup-ui.js';
 import { fit, formatTenths, zoomAt, pan, followPage, xToTime } from './timeline.mjs';
 import { pickAudioFile, zoomKeyAllowed, zoomFactorFromWheel, wheelIntent, zoomAnchor, createCoalescer, createAnnouncer } from './input-rules.mjs';
@@ -362,7 +362,7 @@ $('exportButton').addEventListener('click', async () => {
     arrangementNotes: $('arrangementNotes').value, review, exportedAt: new Date().toISOString(), eq: eq.snapshot(),
   });
   const text = JSON.stringify(note, null, 2);
-  if (exportTarget(window) === 'native') {
+  if (await resolveExportTarget(window) === 'native') {
     try {
       const result = await window.pywebview.api.save_note(text);
       if (result?.saved) announce('Note saved');

@@ -249,10 +249,6 @@ class ServerBoundaryTests(unittest.TestCase):
             analyze_upload(b"bad", 0, 4)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 def start_mode_server(case, mode):
     server = make_server(port=0, mode=mode)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -317,12 +313,18 @@ class ServerLifecycleTests(unittest.TestCase):
         server = start_mode_server(self, "browser")
         port = server.server_address[1]
         host = f"127.0.0.1:{port}"
-        status, _, _ = request(port, "POST", "/api/quit", {"Host": host, "Content-Type": "text/plain"}, b"{}")
-        self.assertEqual(status, 403)
-        status, _, _ = request(port, "POST", "/api/quit", {"Host": host, "Content-Type": "application/json", "Origin": "http://evil.example"}, b"{}")
-        self.assertEqual(status, 403)
-        status, _, _ = request(port, "POST", "/api/quit", {"Host": host}, b"{}")
-        self.assertEqual(status, 403)
+        routes = ("/api/analyze", "/api/quit", "/api/heartbeat", "/api/setup/download", "/api/setup/cancel")
+        for route in routes:
+            with self.subTest(route=route, case="text/plain"):
+                status, _, _ = request(port, "POST", route, {"Host": host, "Content-Type": "text/plain"}, b"{}")
+                self.assertEqual(status, 403)
+            with self.subTest(route=route, case="foreign origin"):
+                headers = {"Host": host, "Content-Type": "application/json", "Origin": "http://evil.example"}
+                status, _, _ = request(port, "POST", route, headers, b"{}")
+                self.assertEqual(status, 403)
+            with self.subTest(route=route, case="no content type"):
+                status, _, _ = request(port, "POST", route, {"Host": host}, b"{}")
+                self.assertEqual(status, 403)
         self.assertFalse(server.quit_event.is_set())
 
     def test_quit_404_outside_browser_mode(self):
@@ -397,3 +399,7 @@ class QuitContentLengthTests(unittest.TestCase):
             resp.read()
             self.assertEqual(resp.status, 200, value)
             self.assertTrue(server.quit_event.is_set(), value)
+
+
+if __name__ == "__main__":
+    unittest.main()

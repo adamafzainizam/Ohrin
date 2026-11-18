@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { exportTarget, desktopView, startHeartbeat } from '../web/desktop.mjs';
+import { exportTarget, resolveExportTarget, desktopView, startHeartbeat } from '../web/desktop.mjs';
 
 test('exportTarget picks native only when save_note is a function', () => {
   assert.equal(exportTarget({ pywebview: { api: { save_note() {} } } }), 'native');
@@ -47,4 +47,32 @@ test('heartbeat runs only in browser mode', () => {
     }
   }
   assert.equal(startHeartbeat({}, null, { fetchFn() {}, setIntervalFn() {} }), null);
+});
+
+function fakeWin(pywebview) {
+  const listeners = {};
+  return {
+    pywebview,
+    listeners,
+    addEventListener(name, fn) { listeners[name] = fn; },
+    removeEventListener(name) { delete listeners[name]; },
+  };
+}
+
+test('resolveExportTarget leaves browsers and ready windows unchanged', async () => {
+  assert.equal(await resolveExportTarget({}, 20), 'download');
+  assert.equal(await resolveExportTarget({ pywebview: { api: { save_note() {} } } }, 20), 'native');
+});
+
+test('resolveExportTarget waits for pywebviewready inside the desktop window', async () => {
+  const win = fakeWin({});
+  const pending = resolveExportTarget(win, 1000);
+  win.pywebview.api = { save_note() {} };
+  win.listeners.pywebviewready();
+  assert.equal(await pending, 'native');
+  assert.equal(win.listeners.pywebviewready, undefined);
+});
+
+test('resolveExportTarget falls back to download after the timeout', async () => {
+  assert.equal(await resolveExportTarget(fakeWin({}), 10), 'download');
 });

@@ -9,6 +9,12 @@ Ohrin itself is Apache-2.0 (see `LICENSE`). This file lists what the packaged de
 | torch | 2.15.0+cpu | Apache-2.0 AND Apache-2.0 WITH LLVM-exception AND BSD-2-Clause AND BSD-3-Clause AND BSL-1.0 AND ISC AND MIT AND Zlib | Licence files for its vendored third-party code ship in its `dist-info`, which is present in the Linux bundle. |
 | numpy | 2.5.4 | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 | `dist-info` present in the Linux bundle. |
 | MarkupSafe | 3.0.3 | BSD-3-Clause | Pulled in by the torch build; `dist-info` present in the Linux bundle. |
+| sympy | 1.14.0 | BSD (metadata: "New BSD License"; `LICENSE` file read) | Pulled in by torch; see the installed `LICENSE`. |
+| mpmath | 1.3.0 | BSD (metadata classifier BSD License; `LICENSE` file read) | Pulled in by torch via sympy. |
+| networkx | 3.7 | BSD-3-Clause | Pulled in by torch. |
+| Jinja2 | 3.1.6 | BSD-3-Clause (metadata classifier BSD License; `LICENSE.txt` read) | Pulled in by torch. |
+| fsspec | 2026.9.0 | BSD-3-Clause | Pulled in by torch. |
+| filelock | 4.2.4 | MIT | Pulled in by torch. |
 | pywebview | 6.2.1 | BSD 3-Clause License | Code bundled; its `dist-info` is not copied into the bundle, see the installed `LICENSE`. |
 | bottle | 0.13.4 | MIT | As above. |
 | proxy_tools | 0.1.0 | MIT (metadata only; the package ships no licence file) | As above. |
