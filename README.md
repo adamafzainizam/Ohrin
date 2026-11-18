@@ -8,7 +8,7 @@ It is a local, open-source Python/ML tool with a browser UI for guitarists learn
 
 Status: local prototype. The workbench, signal analysis, note export (schema v3), a seven-band listening EQ, a four-class instrument model trained on OpenMIC, a per-block instrument timeline and an in-session listening review all work. The model has held-out results on OpenMIC clips only. Its behaviour on full commercial mixes has not been measured, so the app shows its scores as uncertain model output.
 
-Ohrin is meant to be installed and run on your own machine, not hosted. A packaged desktop app is planned but not built yet.
+Ohrin is meant to be installed and run on your own machine, not hosted. A packaged desktop app exists in draft: a Linux build has been made and checked locally on one machine (self-test only). A build workflow for Windows and macOS is written but has not been run, so those builds are untested. No releases have been published yet. See [Install the app](#install-the-app).
 
 ## Start here
 
@@ -17,8 +17,49 @@ Ohrin is meant to be installed and run on your own machine, not hosted. A packag
 ## Next steps
 
 - Check how the instrument heads transfer to full mixes, using audio you are allowed to label and share.
-- Package the app so it can be installed without a Python setup.
+- Run the build workflow, check the Windows and macOS builds and publish a first release.
 - Improve pulse and chord candidates, which are the weakest measured parts.
+
+## Install the app
+
+Status: no release exists yet. The Linux build was made and self-tested locally. The Windows and macOS builds come from `.github/workflows/build.yml`, which has not been run, so their GUIs are unverified. The apps are unsigned and there is no update check: look at GitHub Releases for new versions.
+
+Get a build from the artifacts of a run of the "Build desktop app" workflow in the Actions tab or, once there is one, from Releases.
+
+Unsigned apps need a manual first open:
+
+- macOS: System Settings, Privacy & Security, Open Anyway. Or run `xattr -dr com.apple.quarantine Ohrin.app`.
+- Windows: SmartScreen, More info, Run anyway.
+
+FFmpeg is required for analysis and is not bundled. Install it yourself: `sudo apt install ffmpeg` on Debian or Ubuntu, `brew install ffmpeg` on macOS, or a build from ffmpeg.org on Windows with `ffmpeg` on your PATH. Without it the app opens but analysis stays disabled.
+
+First run: the app asks before downloading the VGGish weights (about 289 MB, from a GitHub release) and AudioSet PCA parameters (about 73 KB, from storage.googleapis.com) and shows progress and a cancel button. It downloads nothing without your consent. Instrument candidates also need a trained head. None is published yet, so instruments show as unavailable until one is.
+
+Data directories hold downloaded weights and settings: `~/.local/share/Ohrin` on Linux (or `$XDG_DATA_HOME/Ohrin`), `~/Library/Application Support/Ohrin` on macOS, `%LOCALAPPDATA%\Ohrin` on Windows. `OHRIN_DATA_DIR` overrides them.
+
+Run `Ohrin --browser` to use your browser instead of the app window. The server keeps running when you close a browser tab; use Quit in the app. The saved theme is kept as long as port 38765 is free.
+
+Linux from source (needs a GTK/WebKit install):
+
+```bash
+sudo apt install ffmpeg gir1.2-webkit2-4.1 libgirepository-2.0-dev libcairo2-dev pkg-config
+python3 -m venv .venv && . .venv/bin/activate
+pip install -r requirements-desktop.txt PyGObject
+python3 -m ohrin.app
+```
+
+An example launcher, saved as `~/.local/share/applications/ohrin.desktop`:
+
+```ini
+[Desktop Entry]
+Type=Application
+Name=Ohrin
+Exec=/path/to/Ohrin/.venv/bin/python -m ohrin.app
+Path=/path/to/Ohrin
+Terminal=false
+```
+
+To build it yourself, see [packaging/README.md](packaging/README.md).
 
 ## Workspace
 
@@ -63,7 +104,7 @@ In the inspector, Left and Right move between tabs, and Home and End jump to the
 
 Theme: the System, Light and Dark buttons set the colour theme. They are in the top bar from 1280 px wide and inside the More menu below that. System follows the operating system, and an explicit choice is remembered in the browser's local storage.
 
-Privacy: the server listens on 127.0.0.1 only and has no option to change that. It rejects requests for other hosts and cross-origin posts. The page sends audio only to that local server, for analysis, and loads no remote scripts, fonts or services. Playback uses a local object URL.
+Privacy: the server listens on 127.0.0.1 only and has no option to change that. It rejects requests for other hosts, and the cross-origin guard covers every POST. The page sends audio only to that local server, for analysis, and loads no remote scripts, fonts or services. Playback uses a local object URL. The only network calls the app makes are the downloads you consent to in setup.
 
 ## Tests
 
@@ -99,4 +140,4 @@ The browser UI has been checked by hand in Chrome and a headless browser using s
 
 Apache-2.0. See [LICENSE](LICENSE).
 
-Third-party assets: the Geist fonts are under the SIL OFL 1.1 (`web/fonts/OFL.txt`) and the Phosphor icons under MIT (`web/icons/LICENSE`).
+Third-party notices for the packaged app are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Third-party assets: the Geist fonts are under the SIL OFL 1.1 (`web/fonts/OFL.txt`) and the Phosphor icons under MIT (`web/icons/LICENSE`).
