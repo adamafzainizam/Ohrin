@@ -31,9 +31,13 @@ Unsigned apps need a manual first open:
 - macOS: System Settings, Privacy & Security, Open Anyway. Or run `xattr -dr com.apple.quarantine Ohrin.app`.
 - Windows: SmartScreen, More info, Run anyway.
 
-FFmpeg is required for analysis and is not bundled. Install it yourself: `sudo apt install ffmpeg` on Debian or Ubuntu, `brew install ffmpeg` on macOS, or a build from ffmpeg.org on Windows with `ffmpeg` on your PATH. Without it the app opens but analysis stays disabled.
+FFmpeg is required for analysis and is not bundled. Install it yourself: `sudo apt install ffmpeg` on Debian or Ubuntu, `brew install ffmpeg` on macOS, or `winget install Gyan.FFmpeg` on Windows (the in-app "Check again" button finds it without a restart; if you edit PATH by hand instead, restart the app). Without it the app opens but analysis stays disabled.
 
-First run: the app asks before downloading the VGGish weights (about 289 MB, from a GitHub release) and AudioSet PCA parameters (about 73 KB, from storage.googleapis.com) and shows progress and a cancel button. It downloads nothing without your consent. Instrument candidates also need a trained head. None is published yet, so instruments show as unavailable until one is.
+First run: no trained instrument head is published yet, so a fresh install downloads nothing and shows instrument candidates as unavailable. Once a head is published, the app will ask before downloading the VGGish weights (about 289 MB, from a GitHub release), the AudioSet PCA parameters (about 73 KB, from storage.googleapis.com) and the head, with progress and a cancel button. It will download nothing without your consent.
+
+Linux runtime requirements: the bundle uses the system WebKitGTK (`libwebkit2gtk-4.1-0` / `gir1.2-webkit2-4.1`); without it the app opens in your browser instead. It also needs a glibc at least as new as the build machine's (CI builds use Ubuntu 24.04, glibc 2.39).
+
+Verification status: the Linux frozen build was opened and used in a window on one Linux Mint 22.3 machine. The Windows and macOS GUIs are unverified, and the CI workflow has not run yet.
 
 Data directories hold downloaded weights and settings: `~/.local/share/Ohrin` on Linux (or `$XDG_DATA_HOME/Ohrin`), `~/Library/Application Support/Ohrin` on macOS, `%LOCALAPPDATA%\Ohrin` on Windows. `OHRIN_DATA_DIR` overrides them.
 

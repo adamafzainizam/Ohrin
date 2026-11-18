@@ -4,6 +4,7 @@ import http.client
 import importlib.util
 import io
 import json
+import os
 import sys
 import threading
 import wave
@@ -148,6 +149,15 @@ def run(report_path=None):
     checks["webview"] = guarded(probe_webview)
     gating = ("server", "files", "setup", "analysis", "torch")
     passed = all(checks[name]["status"] != "fail" for name in gating)
+    if os.environ.get("OHRIN_SELFTEST_STRICT") == "1":
+        if checks["analysis"]["status"] == "skipped":
+            checks["analysis"] = fail("skipped in strict mode: " + checks["analysis"]["detail"])
+            passed = False
+        if paths.is_frozen() and sys.platform.startswith("linux"):
+            web = checks["webview"]
+            if web["status"] != "ok" or not web["detail"].get("webkit2"):
+                checks["webview"] = {"status": "fail", "detail": web["detail"]}
+                passed = False
     report = {"ok": passed, "frozen": paths.is_frozen(), "platform": sys.platform, "checks": checks}
     line = json.dumps(report)
     if sys.stdout is not None:

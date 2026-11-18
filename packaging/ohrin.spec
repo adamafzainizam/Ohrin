@@ -45,5 +45,7 @@ if sys.platform == "darwin":
     app = BUNDLE(
         coll,
         name="Ohrin.app",
-        bundle_identifier="io.github.OWNER.ohrin",  # placeholder: owner chooses
+        # Final: macOS WebKit storage (e.g. the saved theme) is keyed by this identifier,
+        # so it must not change after the first artifact is published.
+        bundle_identifier="io.github.adamafzainizam.ohrin",
     )

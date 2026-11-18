@@ -23,7 +23,7 @@ PyInstaller 6.22.3 builds the app. Its metadata declares "GPLv2-or-later with a 
 
 ## Linux GTK stack (check upstream)
 
-The Linux bundle was built with `gi` (PyGObject) and contains, among others, `libgtk-3.so.0`, `libcairo.so.2`, `libcairo-gobject.so.2` and `libgirepository-1.0.so.1` copied from the build machine's system packages. WebKitGTK is the system webview used through `gir1.2-webkit2-4.1`. The licence texts for PyGObject, GTK, cairo, GObject Introspection and WebKitGTK were not read from local files for this notice: check upstream (https://pygobject.gnome.org, https://www.gtk.org, https://www.cairographics.org, https://webkitgtk.org). The Linux build keeps these as separate shared-library files rather than linking them into one executable.
+The Linux bundle was built with `gi` (PyGObject) and contains, among others, `libgtk-3.so.0`, `libcairo.so.2`, `libcairo-gobject.so.2` and `libgirepository-1.0.so.1` copied from the build machine's system packages. These GTK, GLib, cairo and GObject-Introspection libraries come from the build host. WebKitGTK is not included: it is the system webview, provided by the user's machine and used through `gir1.2-webkit2-4.1`. The licence texts for PyGObject, GTK, cairo, GObject Introspection and WebKitGTK were not read from local files for this notice: check upstream (https://pygobject.gnome.org, https://www.gtk.org, https://www.cairographics.org, https://webkitgtk.org). The Linux build keeps these as separate shared-library files rather than linking them into one executable.
 
 ## Fonts and icons in `web/`
 

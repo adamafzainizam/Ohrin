@@ -69,6 +69,36 @@ class SelfTestTests(unittest.TestCase):
         self.assertEqual(report["checks"]["analysis"]["status"], "skipped")
         self.assertEqual(code, 0, report)
 
+    def test_strict_mode_fails_a_skipped_analysis(self):
+        missing = {"found": False, "ffmpeg": None, "ffprobe": None, "hint": "x"}
+        with mock.patch.dict("os.environ", {"OHRIN_SELFTEST_STRICT": "1"}), \
+                mock.patch.object(selftest.ffmpeg, "status", return_value=missing), \
+                mock.patch.object(server.ffmpeg, "status", return_value=missing):
+            code, text = run_capturing(self)
+        report = json.loads(text.strip().splitlines()[-1])
+        self.assertEqual(code, 1)
+        self.assertFalse(report["ok"])
+        self.assertEqual(report["checks"]["analysis"]["status"], "fail")
+
+    def test_strict_mode_requires_webkit_when_frozen_on_linux(self):
+        bad = {"status": "ok", "detail": {"pywebview": True, "webkit2": False}}
+        with mock.patch.dict("os.environ", {"OHRIN_SELFTEST_STRICT": "1"}), \
+                mock.patch.object(selftest.paths, "is_frozen", return_value=True), \
+                mock.patch.object(selftest.sys, "platform", "linux"), \
+                mock.patch.object(selftest, "check_torch", return_value=selftest.ok()), \
+                mock.patch.object(selftest, "probe_webview", return_value=bad):
+            code, text = run_capturing(self)
+        report = json.loads(text.strip().splitlines()[-1])
+        self.assertEqual(code, 1)
+        self.assertEqual(report["checks"]["webview"]["status"], "fail")
+
+    def test_non_strict_ignores_webview_state(self):
+        bad = {"status": "absent", "detail": {"pywebview": False}}
+        with mock.patch.dict("os.environ", {"OHRIN_SELFTEST_STRICT": ""}), \
+                mock.patch.object(selftest, "probe_webview", return_value=bad):
+            code, _ = run_capturing(self)
+        self.assertEqual(code, 0)
+
     def test_selftest_writes_report_file(self):
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / "sub" / "st.json"

@@ -59,11 +59,41 @@ class PackagingTests(unittest.TestCase):
         for os_name in ("ubuntu-24.04", "windows-latest", "macos-14"):
             self.assertIn(os_name, text)
         self.assertIn("dist/Ohrin/Ohrin --self-test --self-test-report st.json", text)
+        self.assertIn("dist/Ohrin.app/Contents/MacOS/Ohrin --self-test --self-test-report st.json", text)
+        self.assertGreaterEqual(text.count("OHRIN_SELFTEST_STRICT"), 2)
         self.assertIn("'--self-test-report'", text)
-        self.assertRegex(text, r"Self-test \(Linux and macOS\)")
+        self.assertRegex(text, r"Self-test \(macOS\)")
         self.assertIn("Start-Process", text)
         self.assertIn("-Wait -PassThru", text)
         self.assertIn("st.json", text)
+
+    def test_build_workflow_artifact_name_has_no_slash(self):
+        text = (ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+        self.assertNotIn("ref_name", text)
+        self.assertIn("Ohrin-${{ github.sha }}-${{ matrix.os }}-${{ matrix.arch }}", text)
+
+    def test_torch_pinned_to_patched_floor_in_workflows(self):
+        for name in ("build.yml", "ci.yml"):
+            text = (ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
+            self.assertNotIn("torch>=2.2", text, name)
+            self.assertIn("torch>=2.13.0", text, name)
+
+    def test_build_workflow_pr_paths_cover_sources(self):
+        text = (ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+        for path in ("packaging/**", "ohrin/**", "web/**", "tests/**", "requirements*.txt",
+                     ".github/workflows/build.yml"):
+            self.assertIn(f'"{path}"', text)
+
+    def test_windows_installs_ffmpeg_and_linux_has_gir_packages(self):
+        text = (ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+        self.assertIn("choco install ffmpeg -y --no-progress", text)
+        self.assertIn("gir1.2-girepository-3.0", text)
+        self.assertIn("libwebkit2gtk-4.1-0", text)
+
+    def test_bundle_identifier_is_final(self):
+        spec = (PACKAGING / "ohrin.spec").read_text(encoding="utf-8")
+        self.assertIn('bundle_identifier="io.github.adamafzainizam.ohrin"', spec)
+        self.assertNotIn("OWNER", spec)
 
 
 if __name__ == "__main__":
