@@ -153,7 +153,11 @@ class Handler(BaseHTTPRequestHandler):
         return routes
 
     def _post_quit(self, url):
-        size = min(int(self.headers.get("Content-Length", "0") or 0), 1024)
+        try:
+            size = int(self.headers.get("Content-Length", "0") or 0)
+        except ValueError:
+            size = 0
+        size = min(max(size, 0), 1024)
         if size > 0:
             self.rfile.read(size)
         self.server.quit_event.set()

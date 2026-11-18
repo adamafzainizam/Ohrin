@@ -325,3 +325,21 @@ class ServerLifecycleTests(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertIn("application/json", resp_headers["Content-Type"])
         self.assertIn(ffmpeg.install_hint(), json.loads(body)["error"])
+
+
+class QuitContentLengthTests(unittest.TestCase):
+    def test_quit_tolerates_bad_content_length(self):
+        for value in ("abc", "-5"):
+            server = start_mode_server(self, "browser")
+            port = server.server_address[1]
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+            self.addCleanup(conn.close)
+            conn.putrequest("POST", "/api/quit", skip_host=True, skip_accept_encoding=True)
+            conn.putheader("Host", f"127.0.0.1:{port}")
+            conn.putheader("Content-Type", "application/json")
+            conn.putheader("Content-Length", value)
+            conn.endheaders()
+            resp = conn.getresponse()
+            resp.read()
+            self.assertEqual(resp.status, 200, value)
+            self.assertTrue(server.quit_event.is_set(), value)
