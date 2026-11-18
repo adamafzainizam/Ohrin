@@ -1,4 +1,7 @@
 import importlib.util
+import tempfile
+import threading
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -6,6 +9,7 @@ from unittest import mock
 import numpy as np
 
 import ohrin.instrument_inference as inference
+from ohrin import paths
 from ohrin.instrument_inference import InstrumentModel
 
 HAS_TORCH = importlib.util.find_spec("torch") is not None
@@ -16,6 +20,151 @@ if HAS_TORCH:
     class FakeHead(nn.Module):
         def forward(self, x):  # logit grows with the mean embedding value
             return torch.stack([x.mean(1) * 20 - 5, -x.mean(1) * 20 + 5], dim=1)
+
+
+VGGISH_FILES = ("vggish-10086976.pth", "vggish_pca_params.npz")
+
+
+def touch_vggish(directory):
+    directory.mkdir(parents=True, exist_ok=True)
+    for name in VGGISH_FILES:
+        (directory / name).write_bytes(b"x")
+
+
+def save_head(path, extra=None):
+    """A tiny checkpoint in the experiments/train_openmic.py format."""
+    from ohrin.instruments import make_model
+    path.parent.mkdir(parents=True, exist_ok=True)
+    state = {"kind": "mlp", "classes": ("a", "b", "c", "d"), "thresholds": [0.5, 0.4, 0.3, 0.2],
+             "state_dict": make_model("mlp").state_dict(), "feature_source": "test"}
+    state.update(extra or {})
+    torch.save(state, path)
+
+
+class SearchOrderTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmp = Path(tmp.name)
+        self.user = self.tmp / "user"
+        self.repo = self.tmp / "repo"
+        for patcher in (mock.patch.dict("os.environ", {"OHRIN_DATA_DIR": str(self.user)}),
+                        mock.patch.object(inference, "ROOT", self.repo),
+                        mock.patch.object(paths, "is_frozen", return_value=False)):
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def test_search_prefers_user_dir_then_repo(self):
+        touch_vggish(self.repo / "data" / "vggish")
+        (self.repo / "outputs").mkdir()
+        (self.repo / "outputs" / "openmic-mlp.pt").write_bytes(b"x")
+        self.assertEqual(inference.resolve_inputs(), (self.repo / "data" / "vggish", self.repo / "outputs" / "openmic-mlp.pt"))
+        touch_vggish(self.user / "vggish")
+        (self.user / "models").mkdir()
+        (self.user / "models" / "openmic-mlp.pt").write_bytes(b"x")
+        self.assertEqual(inference.resolve_inputs(), (self.user / "vggish", self.user / "models" / "openmic-mlp.pt"))
+
+    def test_explicit_arguments_win(self):
+        touch_vggish(self.user / "vggish")
+        touch_vggish(self.tmp / "w")
+        explicit = self.tmp / "explicit.pt"
+        explicit.write_bytes(b"x")
+        weights, ckpt = inference.resolve_inputs(weights_dir=self.tmp / "w", checkpoint=explicit)
+        self.assertEqual((weights, ckpt), (self.tmp / "w", explicit))
+
+    def test_frozen_never_uses_repo_paths(self):
+        touch_vggish(self.repo / "data" / "vggish")
+        (self.repo / "outputs").mkdir()
+        (self.repo / "outputs" / "openmic-mlp.pt").write_bytes(b"x")
+        with mock.patch.object(paths, "is_frozen", return_value=True):
+            with self.assertRaises(FileNotFoundError) as ctx:
+                inference.resolve_inputs()
+        self.assertIn("vggish", str(ctx.exception))
+
+    def test_vggish_dir_needs_both_files(self):
+        (self.user / "vggish").mkdir(parents=True)
+        (self.user / "vggish" / VGGISH_FILES[0]).write_bytes(b"x")
+        touch_vggish(self.repo / "data" / "vggish")
+        (self.repo / "outputs").mkdir()
+        (self.repo / "outputs" / "openmic-mlp.pt").write_bytes(b"x")
+        weights, _ = inference.resolve_inputs()
+        self.assertEqual(weights, self.repo / "data" / "vggish")
+
+    def test_missing_checkpoint_raises_its_name(self):
+        touch_vggish(self.user / "vggish")
+        with self.assertRaises(FileNotFoundError) as ctx:
+            inference.resolve_inputs()
+        self.assertEqual(str(ctx.exception), "openmic-mlp.pt")
+
+    def test_missing_reason_points_at_setup_panel(self):
+        inference.reset_model_cache()
+        self.addCleanup(inference.reset_model_cache)
+        _, reason = inference.get_model()
+        self.assertIn("Missing local file:", reason)
+        self.assertIn("setup panel", reason)
+        self.assertIn("docs/model-card.md", reason)
+
+    @unittest.skipUnless(HAS_TORCH, "PyTorch not installed")
+    def test_head_checkpoint_loads_weights_only(self):
+        touch_vggish(self.user / "vggish")
+        save_head(self.user / "models" / "openmic-mlp.pt")
+        fake = mock.Mock()
+        with mock.patch("ohrin.vggish.Extractor", return_value=fake), \
+                mock.patch("torch.load", wraps=torch.load) as spy:
+            model = InstrumentModel.load()
+        self.assertIs(spy.call_args.kwargs["weights_only"], True)
+        self.assertEqual(model.classes, ["a", "b", "c", "d"])
+        self.assertIs(model.embed, fake.embed)
+
+    @unittest.skipUnless(HAS_TORCH, "PyTorch not installed")
+    def test_pickled_object_checkpoint_is_rejected_and_reported(self):
+        touch_vggish(self.user / "vggish")
+        save_head(self.user / "models" / "openmic-mlp.pt", {"feature_source": PickledThing()})
+        inference.reset_model_cache()
+        self.addCleanup(inference.reset_model_cache)
+        with mock.patch("ohrin.vggish.Extractor", return_value=mock.Mock()), \
+                mock.patch("sys.stderr", new=__import__("io").StringIO()):
+            model, reason = inference.get_model()
+        self.assertIsNone(model)
+        self.assertIn("could not be loaded", reason)
+
+
+class PickledThing:
+    pass
+
+
+class CacheTests(unittest.TestCase):
+    def tearDown(self):
+        inference.reset_model_cache()
+
+    def test_reset_model_cache_forces_reload(self):
+        inference.reset_model_cache()
+        with mock.patch.object(InstrumentModel, "load", side_effect=[FileNotFoundError("a"), "model"]) as load:
+            first = inference.get_model()
+            self.assertEqual(inference.get_model(), first)
+            self.assertEqual(load.call_count, 1)
+            inference.reset_model_cache()
+            self.assertEqual(inference.get_model(), ("model", None))
+            self.assertEqual(load.call_count, 2)
+
+    def test_concurrent_get_model_loads_once(self):
+        inference.reset_model_cache()
+        count = []
+
+        def slow_load():
+            count.append(1)
+            time.sleep(0.2)
+            return "model"
+
+        results = []
+        with mock.patch.object(InstrumentModel, "load", side_effect=slow_load):
+            threads = [threading.Thread(target=lambda: results.append(inference.get_model())) for _ in range(2)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(10)
+        self.assertEqual(len(count), 1)
+        self.assertEqual(results, [("model", None)] * 2)
 
 
 class ModelAvailabilityTests(unittest.TestCase):

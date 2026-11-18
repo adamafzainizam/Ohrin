@@ -21,3 +21,8 @@ docs/handoff.md
 docs/session-log-*.md
 docs/superpowers/
 .playwright-cli/
+
+# Desktop build outputs (the tracked spec lives under packaging/)
+/dist/
+/build/
+/*.spec

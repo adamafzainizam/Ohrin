@@ -7,92 +7,20 @@ repository. Stdlib only. Usage:
     python3 scripts/fetch_vggish.py [--dest data/vggish] [--force]
 """
 import argparse
-import hashlib
 import http.client
-import os
 import sys
-import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CHUNK = 1024 * 1024
-TIMEOUT_S = 60
-SIZE_SLACK = 1024 * 1024
+if not __package__:
+    sys.path.insert(0, str(ROOT))
 
-FILES = [
-    {
-        "name": "vggish-10086976.pth",
-        "url": "https://github.com/harritaylor/torchvggish/releases/download/v0.1/vggish-10086976.pth",
-        "sha256": "10086976245803799d9194e9a73d9b6c1549c71d1b80106f5cade5608a561f4b",
-        "size": 288567937,
-    },
-    {
-        "name": "vggish_pca_params.npz",
-        "url": "https://storage.googleapis.com/audioset/vggish_pca_params.npz",
-        "sha256": "4d878af3e306defbfb37095365aa7e5a6cecb86bad13e859e626151c4e6a8b9d",
-        "size": 73020,
-    },
-]
+from ohrin.assets import (  # noqa: E402,F401  (re-exported so callers and tests can patch them here)
+    ASSETS, CHUNK, SIZE_SLACK, TIMEOUT_S, Cancelled, ChecksumMismatch, ExistingFileInvalid, SizeExceeded,
+    sha256_file, verify_or_download,
+)
 
-
-class ChecksumMismatch(RuntimeError):
-    pass
-
-
-class ExistingFileInvalid(RuntimeError):
-    pass
-
-
-class SizeExceeded(RuntimeError):
-    pass
-
-
-def sha256_file(path):
-    digest = hashlib.sha256()
-    with open(path, "rb") as stream:
-        for chunk in iter(lambda: stream.read(CHUNK), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def verify_or_download(url, dest, sha256, opener=urllib.request.urlopen, force=False, progress=None, max_bytes=None):
-    """Return "cached" or "downloaded". Never leaves a wrong file at `dest`.
-
-    Downloads go to `<dest>.part` and are renamed only after the checksum matches;
-    `max_bytes` aborts the stream early. A failed run leaves any existing file alone."""
-    dest = Path(dest)
-    if dest.exists():
-        if sha256_file(dest) == sha256:
-            return "cached"
-        if not force:
-            raise ExistingFileInvalid(f"{dest} exists with an unexpected checksum; re-run with --force to replace it")
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    part = dest.with_name(dest.name + ".part")
-    digest = hashlib.sha256()
-    done = 0
-    try:
-        with opener(url, timeout=TIMEOUT_S) as response, open(part, "wb") as out:
-            declared = getattr(getattr(response, "headers", None), "get", lambda *_: None)("Content-Length")
-            if max_bytes is not None and declared and declared.isdigit() and int(declared) > max_bytes:
-                raise SizeExceeded(f"server announced {declared} bytes, more than the expected {max_bytes}; aborting")
-            while True:
-                chunk = response.read(CHUNK)
-                if not chunk:
-                    break
-                done += len(chunk)
-                if max_bytes is not None and done > max_bytes:
-                    raise SizeExceeded(f"download exceeded the expected size of {max_bytes} bytes; aborting")
-                out.write(chunk)
-                digest.update(chunk)
-                if progress:
-                    progress(done)
-        if digest.hexdigest() != sha256:
-            raise ChecksumMismatch(f"checksum mismatch: expected {sha256}, got {digest.hexdigest()}")
-        os.replace(part, dest)
-    finally:
-        if part.exists():
-            part.unlink()
-    return "downloaded"
+FILES = [{k: e[k] for k in ("name", "url", "sha256", "size")} for e in ASSETS if e["subdir"] == "vggish"]
 
 
 def main(argv=None):

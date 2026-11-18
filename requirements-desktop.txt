@@ -1,0 +1,7 @@
+# Desktop app build. Install CPU torch first:
+#   Linux/Windows: pip install torch --index-url https://download.pytorch.org/whl/cpu
+#   macOS: plain PyPI
+# PyGObject (Linux window) is not listed; see the Slice D spec, D.2.
+-r requirements-ml.txt
+pywebview>=6.2,<7
+pyinstaller>=6.10,<7

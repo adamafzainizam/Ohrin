@@ -6,10 +6,13 @@ fitted and evaluated on OpenMIC clips; nothing here validates them on full
 commercial mixes, so results are shown as uncertain model outputs.
 """
 import sys
+import threading
 import traceback
 from pathlib import Path
 
 import numpy as np
+
+from . import paths
 
 # torch (and the modules that import it) are loaded lazily so the core
 # workbench imports and runs without PyTorch installed.
@@ -25,6 +28,39 @@ def decode_mono_16k(*args, **kwargs):
     return decode(*args, **kwargs)
 
 
+VGGISH_FILES = ("vggish-10086976.pth", "vggish_pca_params.npz")
+
+
+def resolve_inputs(weights_dir=None, checkpoint=None, kind="mlp"):
+    """Pick the VGGish directory and head checkpoint: explicit argument, then the user data dir,
+    then (only when running from source) the repo's data/ and outputs/."""
+    name = f"openmic-{kind}.pt"
+    weight_dirs = [paths.vggish_dir()]
+    checkpoints = [paths.models_dir() / name]
+    if not paths.is_frozen():
+        weight_dirs.append(ROOT / "data" / "vggish")
+        checkpoints.append(ROOT / "outputs" / name)
+    if weights_dir is None:
+        weights_dir = next((d for d in weight_dirs if all((d / f).is_file() for f in VGGISH_FILES)), None)
+        if weights_dir is None:
+            first = weight_dirs[0]
+            raise FileNotFoundError(next((f for f in VGGISH_FILES if not (first / f).is_file()), VGGISH_FILES[0]))
+    else:
+        weights_dir = Path(weights_dir)
+        for f in VGGISH_FILES:
+            if not (weights_dir / f).is_file():
+                raise FileNotFoundError(f)
+    if checkpoint is None:
+        checkpoint = next((c for c in checkpoints if c.is_file()), None)
+        if checkpoint is None:
+            raise FileNotFoundError(name)
+    else:
+        checkpoint = Path(checkpoint)
+        if not checkpoint.is_file():
+            raise FileNotFoundError(checkpoint.name)
+    return weights_dir, checkpoint
+
+
 class InstrumentModel:
     def __init__(self, embed, head, classes, thresholds, name):
         self.embed, self.head = embed, head
@@ -36,12 +72,8 @@ class InstrumentModel:
         from .instruments import make_model
         from .vggish import Extractor
 
-        weights_dir = Path(weights_dir or ROOT / "data" / "vggish")
-        checkpoint = Path(checkpoint or ROOT / "outputs" / f"openmic-{kind}.pt")
-        for needed in (weights_dir / "vggish-10086976.pth", weights_dir / "vggish_pca_params.npz", checkpoint):
-            if not needed.is_file():
-                raise FileNotFoundError(needed.name)
-        state = torch.load(checkpoint, map_location="cpu", weights_only=False)
+        weights_dir, checkpoint = resolve_inputs(weights_dir, checkpoint, kind)
+        state = torch.load(checkpoint, map_location="cpu", weights_only=True)
         head = make_model(state["kind"])
         head.load_state_dict(state["state_dict"])
         head.eval()
@@ -83,6 +115,12 @@ class InstrumentModel:
 
 
 _cached = {}
+_lock = threading.Lock()
+
+
+def reset_model_cache():
+    with _lock:
+        _cached.clear()
 
 
 def _short(exc, limit=160):
@@ -97,29 +135,30 @@ def _log_failure(what):
 
 def get_model():
     """Load once; return (model, None) or (None, reason)."""
-    if "result" not in _cached:
-        try:
-            _cached["result"] = (InstrumentModel.load(), None)
-        except ImportError as exc:
-            _log_failure("model load")
-            top = (getattr(exc, "name", None) or "").split(".")[0]
-            if top == "torch":
-                reason = "PyTorch is not installed; instrument candidates are unavailable. See README."
-            elif "torch" in str(exc).lower():
-                reason = (f"PyTorch failed to import: {_short(exc)}; "
-                          "instrument candidates are unavailable. Fix it and restart the server.")
-            else:
-                reason = (f"A dependency could not be imported ({type(exc).__name__}: {_short(exc)}); "
-                          "instrument candidates are unavailable. Fix it and restart the server.")
-            _cached["result"] = (None, reason)
-        except FileNotFoundError as exc:
-            _log_failure("model load")
-            _cached["result"] = (None, f"Missing local file: {exc}. See docs/model-card.md.")
-        except Exception as exc:  # corrupt or incompatible weights/checkpoint: report, do not drop the request
-            _log_failure("model load")
-            _cached["result"] = (None, f"The instrument model could not be loaded ({type(exc).__name__}: {_short(exc)}). "
-                                       "Check the weights and checkpoint, then restart the server.")
-    return _cached["result"]
+    with _lock:
+        if "result" not in _cached:
+            try:
+                _cached["result"] = (InstrumentModel.load(), None)
+            except ImportError as exc:
+                _log_failure("model load")
+                top = (getattr(exc, "name", None) or "").split(".")[0]
+                if top == "torch":
+                    reason = "PyTorch is not installed; instrument candidates are unavailable. See README."
+                elif "torch" in str(exc).lower():
+                    reason = (f"PyTorch failed to import: {_short(exc)}; "
+                              "instrument candidates are unavailable. Fix it and restart the server.")
+                else:
+                    reason = (f"A dependency could not be imported ({type(exc).__name__}: {_short(exc)}); "
+                              "instrument candidates are unavailable. Fix it and restart the server.")
+                _cached["result"] = (None, reason)
+            except FileNotFoundError as exc:
+                _log_failure("model load")
+                _cached["result"] = (None, f"Missing local file: {exc}. Download the instrument model from the setup panel, or see docs/model-card.md when running from source.")
+            except Exception as exc:  # corrupt or incompatible weights/checkpoint: report, do not drop the request
+                _log_failure("model load")
+                _cached["result"] = (None, f"The instrument model could not be loaded ({type(exc).__name__}: {_short(exc)}). "
+                                           "Check the weights and checkpoint, then restart the server.")
+        return _cached["result"]
 
 
 def predict_or_unavailable(path, start_s, end_s):
