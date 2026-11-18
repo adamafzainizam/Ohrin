@@ -7,6 +7,7 @@ import './timeline.test.mjs';
 import './store.test.mjs';
 import './transport.test.mjs';
 import './theme.test.mjs';
+import './desktop.test.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {

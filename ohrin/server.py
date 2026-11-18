@@ -25,7 +25,7 @@ FILES = {"/": "index.html", "/style.css": "style.css", "/app.js": "app.js", "/st
          "/lanes/energy.js": "lanes/energy.js",
          "/lanes/instruments.js": "lanes/instruments.js",
          "/lanes/playhead.js": "lanes/playhead.js",
-         "/tokens.css": "tokens.css", "/theme.mjs": "theme.mjs",
+         "/tokens.css": "tokens.css", "/theme.mjs": "theme.mjs", "/desktop.mjs": "desktop.mjs",
          "/fonts/Geist-Variable.woff2": "fonts/Geist-Variable.woff2",
          "/fonts/GeistMono-Variable.woff2": "fonts/GeistMono-Variable.woff2"}
 
