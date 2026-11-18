@@ -46,6 +46,25 @@ class PackagingTests(unittest.TestCase):
             self.assertIn(upper, match[0])
             self.assertRegex(match[0], r">=\d")
 
+    def test_build_workflow_is_read_only_and_has_no_secrets(self):
+        text = (ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+        self.assertIn("contents: read", text)
+        self.assertNotIn("secrets.", text)
+        self.assertNotRegex(text, r"(?i)release")
+        self.assertNotIn("contents: write", text)
+        self.assertIn("persist-credentials: false", text)
+
+    def test_build_workflow_runs_self_test_on_every_os(self):
+        text = (ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+        for os_name in ("ubuntu-24.04", "windows-latest", "macos-14"):
+            self.assertIn(os_name, text)
+        self.assertIn("dist/Ohrin/Ohrin --self-test --self-test-report st.json", text)
+        self.assertIn("'--self-test-report'", text)
+        self.assertRegex(text, r"Self-test \(Linux and macOS\)")
+        self.assertIn("Start-Process", text)
+        self.assertIn("-Wait -PassThru", text)
+        self.assertIn("st.json", text)
+
 
 if __name__ == "__main__":
     unittest.main()
