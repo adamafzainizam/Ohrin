@@ -99,6 +99,13 @@ class SearchOrderTests(unittest.TestCase):
     def test_missing_reason_points_at_setup_panel(self):
         inference.reset_model_cache()
         self.addCleanup(inference.reset_model_cache)
+        if not HAS_TORCH:
+            # load() imports torch before looking for files; stub the imports so
+            # the missing-file path is what gets exercised without PyTorch.
+            stubs = mock.patch.dict("sys.modules", {"torch": mock.Mock(), "ohrin.instruments": mock.Mock(),
+                                                    "ohrin.vggish": mock.Mock()})
+            stubs.start()
+            self.addCleanup(stubs.stop)
         _, reason = inference.get_model()
         self.assertIn("Missing local file:", reason)
         self.assertIn("setup panel", reason)
