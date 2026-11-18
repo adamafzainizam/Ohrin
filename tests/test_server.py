@@ -197,3 +197,131 @@ class ServerBoundaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def start_mode_server(case, mode):
+    server = make_server(port=0, mode=mode)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    def stop():
+        server.shutdown()
+        server.server_close()
+        thread.join(5)
+
+    case.addCleanup(stop)
+    return server
+
+
+class ServerLifecycleTests(unittest.TestCase):
+    def test_make_server_binds_loopback_only(self):
+        server = start_mode_server(self, "dev")
+        self.assertEqual(server.server_address[0], "127.0.0.1")
+        with self.assertRaises(TypeError):
+            make_server(host="0.0.0.0", port=0)
+
+    def test_bind_preferred_uses_preferred_when_free(self):
+        import socket
+        from ohrin.server import bind_preferred
+        with socket.socket() as probe:
+            probe.bind(("127.0.0.1", 0))
+            free = probe.getsockname()[1]
+        server, fell_back = bind_preferred(free, mode="dev")
+        self.addCleanup(server.server_close)
+        self.assertFalse(fell_back)
+        self.assertEqual(server.server_address[1], free)
+
+    def test_bind_preferred_falls_back_when_port_busy(self):
+        import socket
+        from ohrin.server import bind_preferred
+        holder = socket.socket()
+        self.addCleanup(holder.close)
+        holder.bind(("127.0.0.1", 0))
+        holder.listen(1)
+        busy = holder.getsockname()[1]
+        server, fell_back = bind_preferred(busy, mode="window")
+        self.addCleanup(server.server_close)
+        self.assertTrue(fell_back)
+        self.assertNotEqual(server.server_address[1], busy)
+        self.assertEqual(server.mode, "window")
+
+    def test_reuse_address_disabled_on_windows(self):
+        from ohrin.server import OhrinServer, reuse_address_for
+        self.assertFalse(reuse_address_for("win32"))
+        self.assertTrue(reuse_address_for("linux"))
+        self.assertTrue(reuse_address_for("darwin"))
+        import sys
+        self.assertEqual(OhrinServer.allow_reuse_address, reuse_address_for(sys.platform))
+        self.assertTrue(OhrinServer.daemon_threads)
+
+    def test_server_has_mode_and_quit_event(self):
+        server = start_mode_server(self, "window")
+        self.assertEqual(server.mode, "window")
+        self.assertFalse(server.quit_event.is_set())
+
+    def test_guard_applies_to_every_post_route(self):
+        server = start_mode_server(self, "browser")
+        port = server.server_address[1]
+        host = f"127.0.0.1:{port}"
+        status, _, _ = request(port, "POST", "/api/quit", {"Host": host, "Content-Type": "text/plain"}, b"{}")
+        self.assertEqual(status, 403)
+        status, _, _ = request(port, "POST", "/api/quit", {"Host": host, "Content-Type": "application/json", "Origin": "http://evil.example"}, b"{}")
+        self.assertEqual(status, 403)
+        status, _, _ = request(port, "POST", "/api/quit", {"Host": host}, b"{}")
+        self.assertEqual(status, 403)
+        self.assertFalse(server.quit_event.is_set())
+
+    def test_quit_404_outside_browser_mode(self):
+        for mode in ("dev", "window"):
+            server = start_mode_server(self, mode)
+            port = server.server_address[1]
+            headers = {"Host": f"127.0.0.1:{port}", "Content-Type": "application/json"}
+            status, _, _ = request(port, "POST", "/api/quit", headers, b"{}")
+            self.assertEqual(status, 404)
+            self.assertFalse(server.quit_event.is_set())
+
+    def test_quit_sets_event_in_browser_mode(self):
+        server = start_mode_server(self, "browser")
+        port = server.server_address[1]
+        headers = {"Host": f"127.0.0.1:{port}", "Content-Type": "application/json"}
+        status, _, body = request(port, "POST", "/api/quit", headers, b"{}")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {"ok": True})
+        self.assertTrue(server.quit_event.is_set())
+
+    def test_setup_get_shape_and_no_torch_import(self):
+        import sys
+        server = start_mode_server(self, "window")
+        port = server.server_address[1]
+        before = "torch" in sys.modules
+        with mock.patch("importlib.util.find_spec", return_value=None) as spec:
+            status, headers, body = request(port, "GET", "/api/setup", {"Host": f"127.0.0.1:{port}"})
+        self.assertEqual(status, 200)
+        self.assertIn("application/json", headers["Content-Type"])
+        data = json.loads(body)
+        self.assertEqual(set(data), {"mode", "data_dir", "ffmpeg", "torch"})
+        self.assertEqual(data["mode"], "window")
+        self.assertIsInstance(data["data_dir"], str)
+        self.assertEqual(set(data["ffmpeg"]), {"found", "ffmpeg", "ffprobe", "hint"})
+        self.assertIs(data["torch"], False)
+        spec.assert_any_call("torch")
+        self.assertEqual("torch" in sys.modules, before)
+
+    def test_setup_get_rejects_foreign_host(self):
+        port = start_mode_server(self, "dev").server_address[1]
+        status, _, _ = request(port, "GET", "/api/setup", {"Host": "evil.example"})
+        self.assertEqual(status, 403)
+
+    def test_analyze_without_ffmpeg_returns_400_json_with_hint(self):
+        from ohrin import ffmpeg
+        port = start_mode_server(self, "dev").server_address[1]
+        with tempfile.TemporaryDirectory() as d:
+            wav = Path(d) / "t.wav"
+            write_tone(wav)
+            data = wav.read_bytes()
+        headers = {"Host": f"127.0.0.1:{port}", "Content-Type": "audio/wav"}
+        with mock.patch.object(ffmpeg, "find_tool", return_value=None):
+            status, resp_headers, body = request(port, "POST", "/api/analyze?start=0&end=4", headers, data)
+        self.assertEqual(status, 400)
+        self.assertIn("application/json", resp_headers["Content-Type"])
+        self.assertIn(ffmpeg.install_hint(), json.loads(body)["error"])

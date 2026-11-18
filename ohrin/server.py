@@ -1,17 +1,22 @@
 """Local-only HTTP entry point for the Ohrin passage workbench."""
 
+import importlib.util
 import json
 import os
 from pathlib import Path
+import socket
+import sys
 import tempfile
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
+from . import ffmpeg, paths
 from .analysis import analyze_audio
 from .instrument_inference import predict_or_unavailable
 
 
-WEB = Path(__file__).resolve().parent.parent / "web"
+WEB = paths.resource_root() / "web"
 MAX_UPLOAD = 50 * 1024 * 1024
 FILES = {"/": "index.html", "/style.css": "style.css", "/app.js": "app.js", "/state.mjs": "state.mjs", "/eq.mjs": "eq.mjs", "/eq-ui.js": "eq-ui.js", "/timeline.mjs": "timeline.mjs", "/lanes-model.mjs": "lanes-model.mjs", "/peaks.mjs": "peaks.mjs", "/input-rules.mjs": "input-rules.mjs", "/store.mjs": "store.mjs", "/transport.js": "transport.js", "/inspector.js": "inspector.js",
          "/lanes/overview.js": "lanes/overview.js",
@@ -108,6 +113,14 @@ class Handler(BaseHTTPRequestHandler):
             self._reject_host()
             return
         path = urlsplit(self.path).path
+        if path == "/api/setup":
+            self._json(200, {
+                "mode": self.server.mode,
+                "data_dir": str(paths.user_data_dir()),
+                "ffmpeg": ffmpeg.status(),
+                "torch": importlib.util.find_spec("torch") is not None,
+            })
+            return
         if path not in FILES:
             self.send_error(404)
             return
@@ -124,12 +137,29 @@ class Handler(BaseHTTPRequestHandler):
             self._reject_host()
             return
         url = urlsplit(self.path)
-        if url.path != "/api/analyze":
+        handler = self._post_routes().get(url.path)
+        if handler is None:
             self.send_error(404)
             return
         if not self._origin_ok() or not self._content_type_ok():
             self._json(403, {"error": "Cross-origin requests are not allowed."})
             return
+        handler(url)
+
+    def _post_routes(self):
+        routes = {"/api/analyze": self._post_analyze}
+        if self.server.mode == "browser":
+            routes["/api/quit"] = self._post_quit
+        return routes
+
+    def _post_quit(self, url):
+        size = min(int(self.headers.get("Content-Length", "0") or 0), 1024)
+        if size > 0:
+            self.rfile.read(size)
+        self.server.quit_event.set()
+        self._json(200, {"ok": True})
+
+    def _post_analyze(self, url):
         try:
             params = parse_qs(url.query)
             start = float(params["start"][0])
@@ -148,8 +178,35 @@ class Handler(BaseHTTPRequestHandler):
             self._json(400, {"error": str(exc) or "Invalid analysis request."})
 
 
-def make_server(host="127.0.0.1", port=8765):
-    return ThreadingHTTPServer((host, port), Handler)
+def reuse_address_for(platform):
+    return platform != "win32"
+
+
+class OhrinServer(ThreadingHTTPServer):
+    daemon_threads = True
+    allow_reuse_address = reuse_address_for(sys.platform)
+
+    def __init__(self, address, handler, mode="dev"):
+        self.mode = mode
+        self.quit_event = threading.Event()
+        super().__init__(address, handler)
+
+    def server_bind(self):
+        if sys.platform == "win32" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
+def make_server(port=8765, *, mode="dev"):
+    return OhrinServer(("127.0.0.1", port), Handler, mode=mode)
+
+
+def bind_preferred(preferred, *, mode):
+    """Try the preferred port, then any free one. Returns (server, fell_back)."""
+    try:
+        return make_server(preferred, mode=mode), False
+    except OSError:
+        return make_server(0, mode=mode), True
 
 
 def main():
