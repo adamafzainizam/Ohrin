@@ -243,7 +243,7 @@ class ExtractionTests(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
-        self.root = Path(self._tmp.name)
+        self.root = Path(self._tmp.name).resolve()  # macOS temp dirs sit behind the /var symlink
         self.tgz = self.root / "a.tgz"
         self.audio = self.root / "audio_out"
 
@@ -853,7 +853,7 @@ class RemainingFixesTests(unittest.TestCase):
 
     def test_extraction_uses_an_unpredictable_exclusive_temp_file(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            root = Path(tmp).resolve()
             archive = root / "a.tgz"
             member = root / "src" / "audio" / "000" / "000100_0.ogg"
             member.parent.mkdir(parents=True)
