@@ -61,7 +61,7 @@ class PackagingTests(unittest.TestCase):
 
     def test_build_workflow_runs_self_test_on_every_os(self):
         text = (ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
-        for os_name in ("ubuntu-24.04", "windows-latest", "macos-14"):
+        for os_name in ("ubuntu-24.04", "windows-latest", "macos-15"):
             self.assertIn(os_name, text)
         self.assertIn("dist/Ohrin/Ohrin --self-test --self-test-report st.json", text)
         self.assertIn("dist/Ohrin.app/Contents/MacOS/Ohrin --self-test --self-test-report st.json", text)
