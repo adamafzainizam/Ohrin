@@ -9,6 +9,8 @@ import { initTheme, getPalette, onInvalidate, observeCanvasHost } from './theme.
 import { createStore, fileLoaded, isStale } from './store.mjs';
 import { createTransport } from './transport.js';
 import { createInspector } from './inspector.js';
+import { resolveExportTarget, desktopView, startHeartbeat } from './desktop.mjs';
+import { initSetupPanel } from './setup-ui.js';
 import { fit, formatTenths, zoomAt, pan, followPage, xToTime } from './timeline.mjs';
 import { pickAudioFile, zoomKeyAllowed, zoomFactorFromWheel, wheelIntent, zoomAnchor, createCoalescer, createAnnouncer } from './input-rules.mjs';
 import { clampSelection, selectionFromField, formatTime, blockAnnouncement, reviewKey, reconcileReview, pruneReview,
@@ -263,7 +265,14 @@ async function loadFile(chosen) {
   }
 }
 const TRANSPORT_IDS = ['playButton', 'startTime', 'endTime', 'speed', 'loop', 'analyzeButton', 'eqDisclosure'];
-function setTransportEnabled(on) { for (const id of TRANSPORT_IDS) $(id).disabled = !on; }
+// One gate for the Analyse button: a playable file, and FFmpeg present once /api/setup says it is missing.
+let transportOn = false;
+let ffmpegMissing = false;
+function analyseAllowed() { return transportOn && !ffmpegMissing; }
+function setTransportEnabled(on) {
+  transportOn = on;
+  for (const id of TRANSPORT_IDS) $(id).disabled = id === 'analyzeButton' ? !analyseAllowed() : !on;
+}
 // A file that cannot be read or decoded leaves nothing playable: no lanes, no live controls.
 function failLoad(message) {
   player.pause(); transport.cancel();
@@ -341,20 +350,65 @@ $('analyzeButton').addEventListener('click', async () => {
   } catch (error) {
     if (!settle().stale) { setText('selectionLabel', error.message); announce(error.message); }
   } finally {
-    if (settle().ownsButton) { button.disabled = false; resetAnalyzeButton(); store.set({ analysing: false }); }
+    if (settle().ownsButton) { button.disabled = !analyseAllowed(); resetAnalyzeButton(); store.set({ analysing: false }); }
   }
 });
 
-$('exportButton').addEventListener('click', () => {
+$('exportButton').addEventListener('click', async () => {
   const { file, analysis, review } = store.get();
   if (!analysis) return;
   const note = buildPassageNote({
     fileName: file.name, analysis, chordCorrection: $('chordCorrection').value,
     arrangementNotes: $('arrangementNotes').value, review, exportedAt: new Date().toISOString(), eq: eq.snapshot(),
   });
-  const url = URL.createObjectURL(new Blob([JSON.stringify(note, null, 2)], { type: 'application/json' }));
+  const text = JSON.stringify(note, null, 2);
+  if (await resolveExportTarget(window) === 'native') {
+    try {
+      const result = await window.pywebview.api.save_note(text);
+      if (result?.saved) announce('Note saved');
+    } catch (error) {
+      announce('The note could not be saved.');
+    }
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
   const link = document.createElement('a'); link.href = url; link.download = 'ohrin-passage-note.json'; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+// Setup from the server: Quit in browser mode, and the FFmpeg gate. A failed fetch gates nothing.
+function applyDesktopView(setup) {
+  const view = desktopView(setup);
+  $('quitButton').hidden = !view.showQuit;
+  ffmpegMissing = view.ffmpegMissing;
+  $('ffmpegBanner').hidden = !view.ffmpegMissing;
+  setText('ffmpegMessage', view.ffmpegMessage);
+  if (!store.get().analysing) $('analyzeButton').disabled = !analyseAllowed();
+}
+async function loadSetup() {
+  try {
+    const response = await fetch('/api/setup');
+    if (!response.ok) return null;
+    return await response.json();
+  } catch (error) { return null; }
+}
+const setupPanel = initSetupPanel({ announce, loadSetup, focusAfterClose: () => $('openButton') });
+loadSetup().then(setup => { applyDesktopView(setup); setupPanel.show(setup); startHeartbeat(window, setup); });
+$('ffmpegRecheck').addEventListener('click', async () => {
+  const setup = await loadSetup();
+  applyDesktopView(setup);
+  announce(desktopView(setup).ffmpegMissing ? 'FFmpeg is still missing' : 'FFmpeg found');
+});
+$('quitButton').addEventListener('click', async () => {
+  $('quitButton').disabled = true;
+  try {
+    await fetch('/api/quit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  } catch (error) { /* the server may close the connection as it stops */ }
+  $('topBar').hidden = true; $('eqPanel').hidden = true;
+  const main = $('workbench');
+  main.replaceChildren();
+  const message = document.createElement('p'); message.className = 'empty-title stopped'; message.tabIndex = -1; message.textContent = 'Ohrin has stopped. You can close this tab.';
+  main.append(message); message.focus();
 });
 initTheme();
 observeCanvasHost(canvas);

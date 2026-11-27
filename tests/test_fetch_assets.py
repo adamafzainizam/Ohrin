@@ -169,7 +169,7 @@ class OpenMICFetchTests(unittest.TestCase):
             dest, archive=archive, expected_md5=fetch_openmic.file_digest(archive, "md5"),
             expected_npz_sha=sha(b"npz-bytes"), out=messages.append)
         self.assertEqual(code, 0)
-        written = sorted(str(p.relative_to(self.dir / "out")) for p in (self.dir / "out").rglob("*") if p.is_file())
+        written = sorted(p.relative_to(self.dir / "out").as_posix() for p in (self.dir / "out").rglob("*") if p.is_file())
         self.assertEqual(written, sorted(f"openmic-2018/{n}" for n in fetch_openmic.ALLOWLIST))
         self.assertFalse((self.dir / "x").exists())
         self.assertTrue(archive.exists())

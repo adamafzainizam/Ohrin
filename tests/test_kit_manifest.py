@@ -734,6 +734,7 @@ EXTRACT_NAMES = ['R/K/dup1.wav', 'R/K/dup2.wav', 'R/K/bad.wav', 'R/K/link.wav', 
 
 
 @unittest.skipIf(np is None, 'numpy not installed')
+@unittest.skipIf(sys.platform == 'win32', 'the fake unrar is a shebang script, which Windows cannot execute')
 class ExtractFlowTests(unittest.TestCase):
     def setUp(self):
         tmpdir = tempfile.TemporaryDirectory()

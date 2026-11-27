@@ -1,0 +1,78 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { exportTarget, resolveExportTarget, desktopView, startHeartbeat } from '../web/desktop.mjs';
+
+test('exportTarget picks native only when save_note is a function', () => {
+  assert.equal(exportTarget({ pywebview: { api: { save_note() {} } } }), 'native');
+  assert.equal(exportTarget({ pywebview: { api: { save_note: 'x' } } }), 'download');
+  assert.equal(exportTarget({ pywebview: { api: {} } }), 'download');
+  assert.equal(exportTarget({}), 'download');
+  assert.equal(exportTarget(undefined), 'download');
+});
+
+test('desktopView shows Quit only in browser mode', () => {
+  const found = { found: true, hint: 'x' };
+  assert.equal(desktopView({ mode: 'browser', ffmpeg: found }).showQuit, true);
+  assert.equal(desktopView({ mode: 'window', ffmpeg: found }).showQuit, false);
+  assert.equal(desktopView({ mode: 'dev', ffmpeg: found }).showQuit, false);
+});
+
+test('desktopView gates analysis when ffmpeg is missing and includes the hint', () => {
+  const view = desktopView({ mode: 'dev', ffmpeg: { found: false, hint: 'sudo apt install ffmpeg' } });
+  assert.equal(view.ffmpegMissing, true);
+  assert.equal(view.ffmpegMessage, 'FFmpeg is needed to analyse audio. Install it with: sudo apt install ffmpeg');
+  const ok = desktopView({ mode: 'dev', ffmpeg: { found: true, hint: 'h' } });
+  assert.equal(ok.ffmpegMissing, false);
+});
+
+test('desktopView tolerates missing setup', () => {
+  for (const setup of [undefined, null, {}, 'oops']) {
+    const view = desktopView(setup);
+    assert.equal(view.showQuit, false);
+    assert.equal(view.ffmpegMissing, false);
+  }
+});
+
+test('heartbeat runs only in browser mode', () => {
+  for (const [mode, expected] of [['browser', 1], ['window', 0], ['dev', 0]]) {
+    const calls = []; const timers = [];
+    const fetchFn = (url, opts) => { calls.push([url, opts]); return Promise.resolve({}); };
+    startHeartbeat({}, { mode }, { fetchFn, setIntervalFn: (fn, ms) => { timers.push(ms); return 1; } });
+    assert.equal(calls.length, expected);
+    assert.deepEqual(timers, expected ? [10000] : []);
+    if (expected) {
+      assert.equal(calls[0][0], '/api/heartbeat');
+      assert.equal(calls[0][1].method, 'POST');
+      assert.equal(calls[0][1].headers['Content-Type'], 'application/json');
+    }
+  }
+  assert.equal(startHeartbeat({}, null, { fetchFn() {}, setIntervalFn() {} }), null);
+});
+
+function fakeWin(pywebview) {
+  const listeners = {};
+  return {
+    pywebview,
+    listeners,
+    addEventListener(name, fn) { listeners[name] = fn; },
+    removeEventListener(name) { delete listeners[name]; },
+  };
+}
+
+test('resolveExportTarget leaves browsers and ready windows unchanged', async () => {
+  assert.equal(await resolveExportTarget({}, 20), 'download');
+  assert.equal(await resolveExportTarget({ pywebview: { api: { save_note() {} } } }, 20), 'native');
+});
+
+test('resolveExportTarget waits for pywebviewready inside the desktop window', async () => {
+  const win = fakeWin({});
+  const pending = resolveExportTarget(win, 1000);
+  win.pywebview.api = { save_note() {} };
+  win.listeners.pywebviewready();
+  assert.equal(await pending, 'native');
+  assert.equal(win.listeners.pywebviewready, undefined);
+});
+
+test('resolveExportTarget falls back to download after the timeout', async () => {
+  assert.equal(await resolveExportTarget(fakeWin({}), 10), 'download');
+});
