@@ -1,3 +1,4 @@
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -8,8 +9,9 @@ class DataDirTests(unittest.TestCase):
     home = Path("/home/u")
 
     def test_data_dir_linux_xdg_absolute_and_relative(self):
-        got = paths.user_data_dir(env={"XDG_DATA_HOME": "/x/share"}, platform="linux", home=self.home)
-        self.assertEqual(got, Path("/x/share/Ohrin"))
+        share = Path(tempfile.gettempdir()) / "share"  # absolute on every host OS
+        got = paths.user_data_dir(env={"XDG_DATA_HOME": str(share)}, platform="linux", home=self.home)
+        self.assertEqual(got, share / "Ohrin")
         got = paths.user_data_dir(env={"XDG_DATA_HOME": "relative/dir"}, platform="linux", home=self.home)
         self.assertEqual(got, self.home / ".local/share/Ohrin")
         got = paths.user_data_dir(env={}, platform="linux", home=self.home)
