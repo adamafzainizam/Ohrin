@@ -1,3 +1,4 @@
+import os
 import hashlib
 import io
 import subprocess
@@ -167,6 +168,9 @@ class AssetsTests(unittest.TestCase):
             assets.asset_status(self.dir)
             self.assertEqual(spy.call_count, 1)
             target.write_bytes(b"abd")
+            # same size: bump mtime explicitly, since Windows timestamps can be too coarse to differ
+            st = target.stat()
+            os.utime(target, ns=(st.st_atime_ns, st.st_mtime_ns + 2_000_000_000))
             status = assets.asset_status(self.dir)
             self.assertEqual(spy.call_count, 2)
             self.assertFalse(status[0]["verified"])
